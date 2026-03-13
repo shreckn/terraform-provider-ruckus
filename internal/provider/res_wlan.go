@@ -15,12 +15,117 @@ import (
 
 type WLANResource struct{ client *APIClient }
 
+type WLANSecurityModel struct {
+	Mode          types.String `tfsdk:"mode"`
+	Passphrase    types.String `tfsdk:"passphrase"`
+	AuthProfileID types.String `tfsdk:"auth_profile_id"`
+	Encryption    types.String `tfsdk:"encryption"`
+}
+type WLANVLANModel struct {
+	AccessVLAN  types.Int64 `tfsdk:"access_vlan"`
+	DynamicVLAN types.Bool  `tfsdk:"dynamic_vlan"`
+}
+type WLANRadioModel struct {
+	Band            types.String `tfsdk:"band"`
+	ClientIsolation types.Bool   `tfsdk:"client_isolation"`
+}
+type WLANTunnelModel struct {
+	Type      types.String `tfsdk:"type"`
+	ProfileID types.String `tfsdk:"profile_id"`
+}
+type WLANAdvancedModel struct {
+	MinBSSRate types.Int64 `tfsdk:"min_bss_rate"`
+	OFDMA      types.Bool  `tfsdk:"ofdma"`
+}
+
 type WLANModel struct {
-	ID          types.String `tfsdk:"id"`          // computed
-	ZoneID      types.String `tfsdk:"zone_id"`     // required
-	Name        types.String `tfsdk:"name"`        // required
-	SSID        types.String `tfsdk:"ssid"`        // required
-	Description types.String `tfsdk:"description"` // optional
+	ID          types.String `tfsdk:"id"`
+	ZoneID      types.String `tfsdk:"zone_id"`
+	Name        types.String `tfsdk:"name"`
+	SSID        types.String `tfsdk:"ssid"`
+	Description types.String `tfsdk:"description"`
+
+	Security *WLANSecurityModel `tfsdk:"security"`
+	VLAN     *WLANVLANModel     `tfsdk:"vlan"`
+	Radio    *WLANRadioModel    `tfsdk:"radio"`
+	Tunnel   *WLANTunnelModel   `tfsdk:"tunnel"`
+	Advanced *WLANAdvancedModel `tfsdk:"advanced"`
+}
+
+func buildCreateWLANReq(plan *WLANModel) createWLANReq {
+	req := createWLANReq{
+		Name: plan.Name.ValueString(),
+		SSID: plan.SSID.ValueString(),
+	}
+	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
+		req.Description = plan.Description.ValueString()
+	}
+
+	if plan.Security != nil {
+		sec := &wlanSecurity{}
+		if !plan.Security.Mode.IsNull() {
+			sec.Mode = plan.Security.Mode.ValueString()
+		}
+		if !plan.Security.Passphrase.IsNull() {
+			sec.Passphrase = plan.Security.Passphrase.ValueString()
+		}
+		if !plan.Security.AuthProfileID.IsNull() {
+			sec.AuthProfileID = plan.Security.AuthProfileID.ValueString()
+		}
+		if !plan.Security.Encryption.IsNull() {
+			sec.Encryption = plan.Security.Encryption.ValueString()
+		}
+		req.Security = sec
+	}
+
+	if plan.VLAN != nil {
+		v := &wlanVLAN{}
+		if !plan.VLAN.AccessVLAN.IsNull() {
+			av := int(plan.VLAN.AccessVLAN.ValueInt64())
+			v.AccessVLAN = &av
+		}
+		if !plan.VLAN.DynamicVLAN.IsNull() {
+			v.DynamicVLAN = plan.VLAN.DynamicVLAN.ValueBool()
+		}
+		req.VLAN = v
+	}
+
+	if plan.Radio != nil {
+		r := &wlanRadio{}
+		if !plan.Radio.Band.IsNull() {
+			r.Band = plan.Radio.Band.ValueString()
+		}
+		if !plan.Radio.ClientIsolation.IsNull() {
+			b := plan.Radio.ClientIsolation.ValueBool()
+			r.ClientIsolation = &b
+		}
+		req.Radio = r
+	}
+
+	if plan.Tunnel != nil {
+		t := &wlanTunnel{}
+		if !plan.Tunnel.Type.IsNull() {
+			t.Type = plan.Tunnel.Type.ValueString()
+		}
+		if !plan.Tunnel.ProfileID.IsNull() {
+			t.ProfileID = plan.Tunnel.ProfileID.ValueString()
+		}
+		req.Tunnel = t
+	}
+
+	if plan.Advanced != nil {
+		a := &wlanAdvanced{}
+		if !plan.Advanced.MinBSSRate.IsNull() {
+			r := int(plan.Advanced.MinBSSRate.ValueInt64())
+			a.MinBSSRate = &r
+		}
+		if !plan.Advanced.OFDMA.IsNull() {
+			b := plan.Advanced.OFDMA.ValueBool()
+			a.OFDMA = &b
+		}
+		req.Advanced = a
+	}
+	return req
 }
 
 func NewWLANResource() resource.Resource { return &WLANResource{} }
@@ -38,6 +143,46 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"ssid":        schema.StringAttribute{Required: true},
 			"description": schema.StringAttribute{Optional: true},
 		},
+		Blocks: map[string]schema.Block{
+			"security": schema.SingleNestedBlock{
+				Attributes: map[string]schema.Attribute{
+					// e.g. "open", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "webauth", "wispr"
+					"mode": schema.StringAttribute{Optional: true},
+					// PSK for *_psk modes
+					"passphrase": schema.StringAttribute{Optional: true, Sensitive: true},
+					// RADIUS / AAA profile id for 802.1X, or auth server reference
+					"auth_profile_id": schema.StringAttribute{Optional: true},
+					// encryption hints if your firmware expects them (e.g., "ccmp", "tkip_ccmp", "sae", "owe")
+					"encryption": schema.StringAttribute{Optional: true},
+				},
+			},
+			"vlan": schema.SingleNestedBlock{
+				Attributes: map[string]schema.Attribute{
+					"access_vlan":  schema.Int64Attribute{Optional: true}, // static access VLAN
+					"dynamic_vlan": schema.BoolAttribute{Optional: true},  // enable RADIUS dynamic VLAN
+				},
+			},
+			"radio": schema.SingleNestedBlock{
+				Attributes: map[string]schema.Attribute{
+					// "2.4", "5", "6", "both" (consult your API version; some expose per‑band flags)
+					"band":             schema.StringAttribute{Optional: true},
+					"client_isolation": schema.BoolAttribute{Optional: true},
+				},
+			},
+			"tunnel": schema.SingleNestedBlock{
+				Attributes: map[string]schema.Attribute{
+					// "none", "ruckus_gre", "soft_gre", "ipsec"
+					"type":       schema.StringAttribute{Optional: true},
+					"profile_id": schema.StringAttribute{Optional: true},
+				},
+			},
+			"advanced": schema.SingleNestedBlock{
+				Attributes: map[string]schema.Attribute{
+					"min_bss_rate": schema.Int64Attribute{Optional: true}, // minimum basic rate (kbps)
+					"ofdma":        schema.BoolAttribute{Optional: true},  // if supported by firmware/band
+				},
+			},
+		},
 	}
 }
 
@@ -47,12 +192,54 @@ func (r *WLANResource) Configure(_ context.Context, req resource.ConfigureReques
 	}
 }
 
-// ---- API payloads (simplified; consult your version's OpenAPI for full fields) [3](https://docs.ruckuswireless.com/smartzone/7.1.1/vsze-public-api-reference-guide-711.html)
-type createWLANReq struct {
-	Name        string `json:"name"`
-	SSID        string `json:"ssid"`
-	Description string `json:"description,omitempty"`
+// ---- API payloads (example fields; verify against your controller OpenAPI) ----
+// Security
+type wlanSecurity struct {
+	// e.g., "open", "wpa2", "wpa3", "wpa2_wpa3_mixed", "8021x", "webauth", "wispr"
+	Mode string `json:"method,omitempty"`
+	// For PSK modes
+	Passphrase string `json:"passphrase,omitempty"`
+	// AAA / RADIUS profile
+	AuthProfileID string `json:"authServerId,omitempty"`
+	// e.g., "ccmp", "tkip_ccmp", "sae", "owe" (depends on mode)
+	Encryption string `json:"encryption,omitempty"`
 }
+
+// VLAN
+type wlanVLAN struct {
+	AccessVLAN  *int `json:"accessVlan,omitempty"`
+	DynamicVLAN bool `json:"dynamicVlan,omitempty"`
+}
+
+// Radio/band
+type wlanRadio struct {
+	Band            string `json:"band,omitempty"` // "2.4","5","6","both" (verify)
+	ClientIsolation *bool  `json:"clientIsolation,omitempty"`
+}
+
+// Tunneling
+type wlanTunnel struct {
+	Type      string `json:"type,omitempty"`      // "ruckus_gre","soft_gre","ipsec"
+	ProfileID string `json:"profileId,omitempty"` // pre-created tunnel profile id
+}
+
+// Advanced
+type wlanAdvanced struct {
+	MinBSSRate *int  `json:"minBssRate,omitempty"` // kbps
+	OFDMA      *bool `json:"ofdma,omitempty"`
+}
+
+type createWLANReq struct {
+	Name        string        `json:"name"`
+	SSID        string        `json:"ssid"`
+	Description string        `json:"description,omitempty"`
+	Security    *wlanSecurity `json:"security,omitempty"`
+	VLAN        *wlanVLAN     `json:"vlan,omitempty"`
+	Radio       *wlanRadio    `json:"radio,omitempty"`
+	Tunnel      *wlanTunnel   `json:"tunnel,omitempty"`
+	Advanced    *wlanAdvanced `json:"advanced,omitempty"`
+}
+
 type createWLANResp struct {
 	ID string `json:"id"`
 }
@@ -74,10 +261,8 @@ func (r *WLANResource) Create(ctx context.Context, req resource.CreateRequest, r
 	endpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlans?%s",
 		r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), q.Encode())
 
-	body, _ := json.Marshal(createWLANReq{
-		Name: plan.Name.ValueString(), SSID: plan.SSID.ValueString(),
-		Description: plan.Description.ValueString(),
-	})
+	payload := buildCreateWLANReq(&plan)
+	body, _ := json.Marshal(payload)
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
@@ -102,7 +287,6 @@ func (r *WLANResource) Create(ctx context.Context, req resource.CreateRequest, r
 		resp.Diagnostics.AddError("create failed", fmt.Sprintf("status %d", httpResp.StatusCode))
 		return
 	}
-
 	var cr createWLANResp
 	if err := json.NewDecoder(httpResp.Body).Decode(&cr); err != nil {
 		resp.Diagnostics.AddError("decode failed", err.Error())
@@ -193,11 +377,8 @@ func (r *WLANResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	q.Set("serviceTicket", r.client.ServiceTicket)
 	endpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlans/%s?%s",
 		r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), plan.ID.ValueString(), q.Encode())
-
-	body, _ := json.Marshal(createWLANReq{
-		Name: plan.Name.ValueString(), SSID: plan.SSID.ValueString(),
-		Description: plan.Description.ValueString(),
-	})
+	payload := buildCreateWLANReq(&plan) // same shape for PUT in most versions
+	body, _ := json.Marshal(payload)
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, bytes.NewReader(body))
 	if err != nil {
@@ -222,7 +403,6 @@ func (r *WLANResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		resp.Diagnostics.AddError("update failed", fmt.Sprintf("status %d", httpResp.StatusCode))
 		return
 	}
-	// No body required; still drain to allow keep-alive.
 	drainBody(httpResp.Body)
 	resp.State.Set(ctx, &plan)
 }
