@@ -13,13 +13,12 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// ProviderModel defines user-configurable fields.
 type ProviderModel struct {
 	Host               types.String `tfsdk:"host"` // e.g., https://sz.example.com:8443
 	Username           types.String `tfsdk:"username"`
 	Password           types.String `tfsdk:"password"`
 	Domain             types.String `tfsdk:"domain"`               // e.g., "System"
-	APIVersion         types.String `tfsdk:"api_version"`          // e.g., v13_1; optional
+	APIVersion         types.String `tfsdk:"api_version"`          // e.g., v13_1 (SZ 7.1.1)
 	InsecureSkipVerify types.Bool   `tfsdk:"insecure_skip_verify"` // labs only
 	TimeoutSeconds     types.Int64  `tfsdk:"timeout_seconds"`
 }
@@ -46,14 +45,6 @@ func (p *ruckusProvider) Schema(_ context.Context, _ provider.SchemaRequest, res
 	}
 }
 
-type APIClient struct {
-	BaseURL       string
-	APIVersion    string
-	ServiceTicket string
-	HTTP          *http.Client
-}
-
-// Configure: login to get a serviceTicket
 func (p *ruckusProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
 	var cfg ProviderModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
@@ -68,17 +59,18 @@ func (p *ruckusProvider) Configure(ctx context.Context, req provider.ConfigureRe
 	}
 	httpClient := &http.Client{Transport: tr, Timeout: timeout}
 
-	apiVersion := "v13_1" // safe default for SZ 7.1.1; override via config
+	apiVersion := "v13_1" // reasonable default for SZ 7.1.1 (overridable). [3](https://docs.ruckuswireless.com/smartzone/7.1.1/vsze-public-api-reference-guide-711.html)
 	if !cfg.APIVersion.IsNull() && !cfg.APIVersion.IsUnknown() && cfg.APIVersion.ValueString() != "" {
 		apiVersion = cfg.APIVersion.ValueString()
 	}
 
-	// POST {host}/wsg/api/public/{apiVersion}/serviceTicket
-	// Body: { username, password, domain }
-	ticket, err := LoginForServiceTicket(ctx, httpClient, cfg.Host.ValueString(), apiVersion,
-		cfg.Username.ValueString(), cfg.Password.ValueString(), cfg.Domain.ValueString())
+	ticket, err := LoginForServiceTicket(
+		ctx, httpClient,
+		cfg.Host.ValueString(), apiVersion,
+		cfg.Username.ValueString(), cfg.Password.ValueString(), cfg.Domain.ValueString(),
+	)
 	if err != nil {
-		resp.Diagnostics.AddError("login failed", err.Error())
+		resp.Diagnostics.AddError("Ruckus SmartZone login failed", err.Error())
 		return
 	}
 
