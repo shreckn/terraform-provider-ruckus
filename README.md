@@ -42,10 +42,10 @@ This was mostly Vibe-Coded. I apologize to any Go aficionados who may read this.
 Until this provider is published to the Terraform Registry, install from source:
 
 ```bash
-git clone https://github.com/yourorg/terraform-provider-ruckus.git
+git clone https://github.com/shreckn/terraform-provider-ruckus.git
 cd terraform-provider-ruckus
 go build -o terraform-provider-ruckus
 
 # Local dev install layout (Linux/macOS example)
-mkdir -p ~/.terraform.d/plugins/registry.terraform.io/yourorg/ruckus/0.1.0/darwin_amd64
-cp terraform-provider-ruckus ~/.terraform.d/plugins/registry.terraform.io/yourorg/ruckus/0.1.0/darwin_amd64/
+mkdir -p ~/.terraform.d/plugins/registry.terraform.io/shreckn/ruckus/0.1.0/darwin_amd64
+cp terraform-provider-ruckus ~/.terraform.d/plugins/registry.terraform.io/shreckn/ruckus/0.1.0/darwin_amd64/
