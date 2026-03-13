@@ -11,7 +11,7 @@ provider "ruckus" {
   host                 = "https://sz.example.com:8443"
   username             = var.username
   password             = var.password
-  domain               = "System"
+  domain               = var.domain
   api_version          = "v13_1"
   insecure_skip_verify = true
 }
@@ -22,9 +22,8 @@ data "ruckus_zone" "hq" {
 
 resource "ruckus_wlan" "corp" {
   zone_id     = data.ruckus_zone.hq.id
-  name        = "Corp-Staff"
-  ssid        = "Corp-Staff"
-  description = "Corp secure WLAN"
+  name        = var.ssid
+  ssid        = "${var.ssid}WLAN"
 
   security {
     mode        = "wpa2_psk"
