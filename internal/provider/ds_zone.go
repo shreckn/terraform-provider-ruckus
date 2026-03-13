@@ -67,7 +67,7 @@ func (d *ZoneDS) Read(ctx context.Context, req datasource.ReadRequest, resp *dat
 		d.client.BaseURL, d.client.APIVersion, q.Encode())
 
 	var zr zonesResp
-	if err := doGET(ctx, d.client, endpoint, &zr); err != nil {
+	if err := doGET(ctx, d.client.HTTP, endpoint, &zr); err != nil { // <-- pass *http.Client
 		resp.Diagnostics.AddError("read zone failed", err.Error())
 		return
 	}
