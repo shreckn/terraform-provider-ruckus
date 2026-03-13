@@ -1,4 +1,4 @@
-module github.com/hashicorp/terraform-provider-scaffolding-framework
+module github.com/shreckn/terraform-provider-ruckus
 
 go 1.25.5
 
@@ -7,6 +7,7 @@ require (
 	github.com/hashicorp/terraform-plugin-go v0.31.0
 	github.com/hashicorp/terraform-plugin-log v0.10.0
 	github.com/hashicorp/terraform-plugin-testing v1.15.0
+	github.com/hashicorp/terraform-provider-scaffolding-framework v0.0.0-20260311132739-75ff0f7da40d
 )
 
 require (

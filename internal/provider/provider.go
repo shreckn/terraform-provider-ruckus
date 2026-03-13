@@ -1,109 +1,105 @@
-// Copyright IBM Corp. 2021, 2025
-// SPDX-License-Identifier: MPL-2.0
-
 package provider
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
+	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework/action"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
-	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
-	"github.com/hashicorp/terraform-plugin-framework/function"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// Ensure ScaffoldingProvider satisfies various provider interfaces.
-var _ provider.Provider = &ScaffoldingProvider{}
-var _ provider.ProviderWithFunctions = &ScaffoldingProvider{}
-var _ provider.ProviderWithEphemeralResources = &ScaffoldingProvider{}
-var _ provider.ProviderWithActions = &ScaffoldingProvider{}
-
-// ScaffoldingProvider defines the provider implementation.
-type ScaffoldingProvider struct {
-	// version is set to the provider version on release, "dev" when the
-	// provider is built and ran locally, and "test" when running acceptance
-	// testing.
-	version string
+// ProviderModel defines user-configurable fields.
+type ProviderModel struct {
+	Host               types.String `tfsdk:"host"` // e.g., https://sz.example.com:8443
+	Username           types.String `tfsdk:"username"`
+	Password           types.String `tfsdk:"password"`
+	Domain             types.String `tfsdk:"domain"`               // e.g., "System"
+	APIVersion         types.String `tfsdk:"api_version"`          // e.g., v13_1; optional
+	InsecureSkipVerify types.Bool   `tfsdk:"insecure_skip_verify"` // labs only
+	TimeoutSeconds     types.Int64  `tfsdk:"timeout_seconds"`
 }
 
-// ScaffoldingProviderModel describes the provider data model.
-type ScaffoldingProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
+type ruckusProvider struct{}
+
+func New() provider.Provider { return &ruckusProvider{} }
+
+func (p *ruckusProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
+	resp.TypeName = "ruckus"
 }
 
-func (p *ScaffoldingProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
-	resp.TypeName = "scaffolding"
-	resp.Version = p.version
-}
-
-func (p *ScaffoldingProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *ruckusProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		Attributes: map[string]schema.Attribute{
-			"endpoint": schema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
-				Optional:            true,
-			},
+			"host":                 schema.StringAttribute{Required: true},
+			"username":             schema.StringAttribute{Optional: true, Sensitive: true},
+			"password":             schema.StringAttribute{Optional: true, Sensitive: true},
+			"domain":               schema.StringAttribute{Optional: true},
+			"api_version":          schema.StringAttribute{Optional: true},
+			"insecure_skip_verify": schema.BoolAttribute{Optional: true},
+			"timeout_seconds":      schema.Int64Attribute{Optional: true},
 		},
 	}
 }
 
-func (p *ScaffoldingProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
-	var data ScaffoldingProviderModel
+type APIClient struct {
+	BaseURL       string
+	APIVersion    string
+	ServiceTicket string
+	HTTP          *http.Client
+}
 
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-
+// Configure: login to get a serviceTicket
+func (p *ruckusProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var cfg ProviderModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &cfg)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
-	// Configuration values are now available.
-	// if data.Endpoint.IsNull() { /* ... */ }
+	tr := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: cfg.InsecureSkipVerify.ValueBool()}}
+	timeout := 30 * time.Second
+	if !cfg.TimeoutSeconds.IsNull() {
+		timeout = time.Duration(cfg.TimeoutSeconds.ValueInt64()) * time.Second
+	}
+	httpClient := &http.Client{Transport: tr, Timeout: timeout}
 
-	// Example client configuration for data sources and resources
-	client := http.DefaultClient
+	apiVersion := "v13_1" // safe default for SZ 7.1.1; override via config
+	if !cfg.APIVersion.IsNull() && !cfg.APIVersion.IsUnknown() && cfg.APIVersion.ValueString() != "" {
+		apiVersion = cfg.APIVersion.ValueString()
+	}
+
+	// POST {host}/wsg/api/public/{apiVersion}/serviceTicket
+	// Body: { username, password, domain }
+	ticket, err := LoginForServiceTicket(ctx, httpClient, cfg.Host.ValueString(), apiVersion,
+		cfg.Username.ValueString(), cfg.Password.ValueString(), cfg.Domain.ValueString())
+	if err != nil {
+		resp.Diagnostics.AddError("login failed", err.Error())
+		return
+	}
+
+	client := &APIClient{
+		BaseURL:       cfg.Host.ValueString(),
+		APIVersion:    apiVersion,
+		ServiceTicket: ticket,
+		HTTP:          httpClient,
+	}
 	resp.DataSourceData = client
 	resp.ResourceData = client
 }
 
-func (p *ScaffoldingProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *ruckusProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
-		NewExampleResource,
+		NewWLANResource,
 	}
 }
 
-func (p *ScaffoldingProvider) EphemeralResources(ctx context.Context) []func() ephemeral.EphemeralResource {
-	return []func() ephemeral.EphemeralResource{
-		NewExampleEphemeralResource,
-	}
-}
-
-func (p *ScaffoldingProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *ruckusProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
-		NewExampleDataSource,
-	}
-}
-
-func (p *ScaffoldingProvider) Functions(ctx context.Context) []func() function.Function {
-	return []func() function.Function{
-		NewExampleFunction,
-	}
-}
-
-func (p *ScaffoldingProvider) Actions(ctx context.Context) []func() action.Action {
-	return []func() action.Action{
-		NewExampleAction,
-	}
-}
-
-func New(version string) func() provider.Provider {
-	return func() provider.Provider {
-		return &ScaffoldingProvider{
-			version: version,
-		}
+		NewZoneDataSource,
 	}
 }
