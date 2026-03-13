@@ -8,7 +8,7 @@ terraform {
 }
 
 provider "ruckus" {
-  host                 = "https://sz.example.com:8443"
+  host                 = var.controller
   username             = var.username
   password             = var.password
   domain               = var.domain
