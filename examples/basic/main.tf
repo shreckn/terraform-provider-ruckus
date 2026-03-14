@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     ruckus = {
-      source  = "shreckn/ruckus"
+      source  = "nshreck/ruckus"
       version = "0.0.1"
     }
   }

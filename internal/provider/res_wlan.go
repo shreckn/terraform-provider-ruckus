@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -146,8 +148,13 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		Blocks: map[string]schema.Block{
 			"security": schema.SingleNestedBlock{
 				Attributes: map[string]schema.Attribute{
-					// e.g. "open", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "webauth", "wispr"
-					"mode": schema.StringAttribute{Optional: true},
+					// e.g. "open", "wep", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "wpa3_enterprise", "webauth", "wispr", "owe"
+					"mode": schema.StringAttribute{
+						Optional: true,
+						Validators: []validator.String{
+							stringvalidator.OneOf("open", "wep", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "wpa3_enterprise", "webauth", "wispr", "owe"),
+						},
+					},
 					// PSK for *_psk modes
 					"passphrase": schema.StringAttribute{Optional: true, Sensitive: true},
 					// RADIUS / AAA profile id for 802.1X, or auth server reference
@@ -195,7 +202,7 @@ func (r *WLANResource) Configure(_ context.Context, req resource.ConfigureReques
 // ---- API payloads (example fields; verify against your controller OpenAPI) ----
 // Security
 type wlanSecurity struct {
-	// e.g., "open", "wpa2", "wpa3", "wpa2_wpa3_mixed", "8021x", "webauth", "wispr"
+	// e.g., "open", "wep", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "wpa3_enterprise", "webauth", "wispr", "owe"
 	Mode string `json:"method,omitempty"`
 	// For PSK modes
 	Passphrase string `json:"passphrase,omitempty"`
