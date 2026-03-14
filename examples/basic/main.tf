@@ -45,3 +45,10 @@ resource "ruckus_wlan" "corp" {
     ofdma        = true
   }
 }
+
+resource "ruckus_wlan_group" "corp_group" {
+  zone_id = data.ruckus_zone.hq.id
+  name    = "Corporate WLAN Group"
+  description = "Group containing corporate WLANs"
+  members = [ruckus_wlan.corp.id]
+}

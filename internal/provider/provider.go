@@ -87,6 +87,7 @@ func (p *ruckusProvider) Configure(ctx context.Context, req provider.ConfigureRe
 func (p *ruckusProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewWLANResource,
+		NewWLANGroupResource,
 	}
 }
 
