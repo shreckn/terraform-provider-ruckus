@@ -25,8 +25,7 @@ type WLANSecurityModel struct {
 	Encryption    types.String `tfsdk:"encryption"`
 }
 type WLANVLANModel struct {
-	AccessVLAN  types.Int64 `tfsdk:"access_vlan"`
-	DynamicVLAN types.Bool  `tfsdk:"dynamic_vlan"`
+	AccessVLAN types.Int64 `tfsdk:"access_vlan"`
 }
 type WLANRadioModel struct {
 	Band            types.String `tfsdk:"band"`
@@ -57,29 +56,11 @@ type WLANModel struct {
 
 func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 	req := createWLANReq{
-		ZoneID: plan.ZoneID.ValueString(),
-		Name:   plan.Name.ValueString(),
-		SSID:   plan.SSID.ValueString(),
+		Name: plan.Name.ValueString(),
+		SSID: plan.SSID.ValueString(),
 	}
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
 		req.Description = plan.Description.ValueString()
-	}
-
-	if plan.Security != nil {
-		sec := &wlanSecurity{}
-		if !plan.Security.Mode.IsNull() {
-			sec.Mode = plan.Security.Mode.ValueString()
-		}
-		if !plan.Security.Passphrase.IsNull() {
-			sec.Passphrase = plan.Security.Passphrase.ValueString()
-		}
-		if !plan.Security.AuthProfileID.IsNull() {
-			sec.AuthProfileID = plan.Security.AuthProfileID.ValueString()
-		}
-		if !plan.Security.Encryption.IsNull() {
-			sec.Encryption = plan.Security.Encryption.ValueString()
-		}
-		req.Security = sec
 	}
 
 	if plan.VLAN != nil {
@@ -88,47 +69,7 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 			av := int(plan.VLAN.AccessVLAN.ValueInt64())
 			v.AccessVLAN = &av
 		}
-		if !plan.VLAN.DynamicVLAN.IsNull() {
-			b := plan.VLAN.DynamicVLAN.ValueBool()
-			v.DynamicVLAN = &b
-		}
 		req.VLAN = v
-	}
-
-	if plan.Radio != nil {
-		r := &wlanRadio{}
-		if !plan.Radio.Band.IsNull() {
-			r.Band = plan.Radio.Band.ValueString()
-		}
-		if !plan.Radio.ClientIsolation.IsNull() {
-			b := plan.Radio.ClientIsolation.ValueBool()
-			r.ClientIsolation = &b
-		}
-		req.Radio = r
-	}
-
-	if plan.Tunnel != nil {
-		t := &wlanTunnel{}
-		if !plan.Tunnel.Type.IsNull() {
-			t.Type = plan.Tunnel.Type.ValueString()
-		}
-		if !plan.Tunnel.ProfileID.IsNull() {
-			t.ProfileID = plan.Tunnel.ProfileID.ValueString()
-		}
-		req.Tunnel = t
-	}
-
-	if plan.Advanced != nil {
-		a := &wlanAdvanced{}
-		if !plan.Advanced.MinBSSRate.IsNull() {
-			r := int(plan.Advanced.MinBSSRate.ValueInt64())
-			a.MinBSSRate = &r
-		}
-		if !plan.Advanced.OFDMA.IsNull() {
-			b := plan.Advanced.OFDMA.ValueBool()
-			a.OFDMA = &b
-		}
-		req.Advanced = a
 	}
 	return req
 }
@@ -168,8 +109,7 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			},
 			"vlan": schema.SingleNestedBlock{
 				Attributes: map[string]schema.Attribute{
-					"access_vlan":  schema.Int64Attribute{Optional: true}, // static access VLAN
-					"dynamic_vlan": schema.BoolAttribute{Optional: true},  // enable RADIUS dynamic VLAN
+					"access_vlan": schema.Int64Attribute{Optional: true}, // static access VLAN
 				},
 			},
 			"radio": schema.SingleNestedBlock{
@@ -217,8 +157,7 @@ type wlanSecurity struct {
 
 // VLAN
 type wlanVLAN struct {
-	AccessVLAN  *int  `json:"accessVlan,omitempty"`
-	DynamicVLAN *bool `json:"dynamicVlan,omitempty"`
+	AccessVLAN *int `json:"accessVlan,omitempty"`
 }
 
 // Radio/band
@@ -240,15 +179,10 @@ type wlanAdvanced struct {
 }
 
 type createWLANReq struct {
-	ZoneID      string        `json:"zoneId"`
-	Name        string        `json:"name"`
-	SSID        string        `json:"ssid"`
-	Description string        `json:"description,omitempty"`
-	Security    *wlanSecurity `json:"security,omitempty"`
-	VLAN        *wlanVLAN     `json:"vlan,omitempty"`
-	Radio       *wlanRadio    `json:"radio,omitempty"`
-	Tunnel      *wlanTunnel   `json:"tunnel,omitempty"`
-	Advanced    *wlanAdvanced `json:"advanced,omitempty"`
+	Name        string    `json:"name"`
+	SSID        string    `json:"ssid"`
+	Description string    `json:"description,omitempty"`
+	VLAN        *wlanVLAN `json:"vlan,omitempty"`
 }
 
 type createWLANResp struct {
@@ -413,11 +347,6 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 			state.VLAN.AccessVLAN = types.Int64Value(int64(*out.VLAN.AccessVLAN))
 		} else {
 			state.VLAN.AccessVLAN = types.Int64Null()
-		}
-		if out.VLAN.DynamicVLAN != nil {
-			state.VLAN.DynamicVLAN = types.BoolValue(*out.VLAN.DynamicVLAN)
-		} else {
-			state.VLAN.DynamicVLAN = types.BoolNull()
 		}
 	} else {
 		state.VLAN = nil
