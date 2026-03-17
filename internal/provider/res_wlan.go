@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -57,8 +57,9 @@ type WLANModel struct {
 
 func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 	req := createWLANReq{
-		Name: plan.Name.ValueString(),
-		SSID: plan.SSID.ValueString(),
+		ZoneID: plan.ZoneID.ValueString(),
+		Name:   plan.Name.ValueString(),
+		SSID:   plan.SSID.ValueString(),
 	}
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
 		req.Description = plan.Description.ValueString()
@@ -88,7 +89,8 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 			v.AccessVLAN = &av
 		}
 		if !plan.VLAN.DynamicVLAN.IsNull() {
-			v.DynamicVLAN = plan.VLAN.DynamicVLAN.ValueBool()
+			b := plan.VLAN.DynamicVLAN.ValueBool()
+			v.DynamicVLAN = &b
 		}
 		req.VLAN = v
 	}
@@ -215,8 +217,8 @@ type wlanSecurity struct {
 
 // VLAN
 type wlanVLAN struct {
-	AccessVLAN  *int `json:"accessVlan,omitempty"`
-	DynamicVLAN bool `json:"dynamicVlan,omitempty"`
+	AccessVLAN  *int  `json:"accessVlan,omitempty"`
+	DynamicVLAN *bool `json:"dynamicVlan,omitempty"`
 }
 
 // Radio/band
@@ -238,6 +240,7 @@ type wlanAdvanced struct {
 }
 
 type createWLANReq struct {
+	ZoneID      string        `json:"zoneId"`
 	Name        string        `json:"name"`
 	SSID        string        `json:"ssid"`
 	Description string        `json:"description,omitempty"`
@@ -250,6 +253,19 @@ type createWLANReq struct {
 
 type createWLANResp struct {
 	ID string `json:"id"`
+}
+
+type wlanResponse struct {
+	ID          string        `json:"id"`
+	ZoneID      string        `json:"zoneId,omitempty"`
+	Name        string        `json:"name"`
+	SSID        string        `json:"ssid"`
+	Description string        `json:"description,omitempty"`
+	Security    *wlanSecurity `json:"security,omitempty"`
+	VLAN        *wlanVLAN     `json:"vlan,omitempty"`
+	Radio       *wlanRadio    `json:"radio,omitempty"`
+	Tunnel      *wlanTunnel   `json:"tunnel,omitempty"`
+	Advanced    *wlanAdvanced `json:"advanced,omitempty"`
 }
 
 func (r *WLANResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -291,8 +307,8 @@ func (r *WLANResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}()
 
 	if httpResp.StatusCode < 200 || httpResp.StatusCode > 299 {
-		drainBody(httpResp.Body)
-		resp.Diagnostics.AddError("create failed", fmt.Sprintf("status %d", httpResp.StatusCode))
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError("create failed", fmt.Sprintf("status %d: %s", httpResp.StatusCode, string(bodyBytes)))
 		return
 	}
 	var cr createWLANResp
@@ -317,11 +333,10 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	q := url.Values{}
 	q.Set("serviceTicket", r.client.ServiceTicket)
-	endpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlans?%s",
-		r.client.BaseURL, r.client.APIVersion, state.ZoneID.ValueString(), q.Encode())
+	endpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlans/%s?%s",
+		r.client.BaseURL, r.client.APIVersion, state.ZoneID.ValueString(), state.ID.ValueString(), q.Encode())
 
-	// Build request so we can handle Close explicitly (using doJSON is fine too).
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, strings.NewReader(state.ID.ValueString()))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("read failed", err.Error())
 		return
@@ -340,25 +355,23 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	}()
 
 	if httpResp.StatusCode == http.StatusNotFound {
-		drainBody(httpResp.Body)
 		resp.State.RemoveResource(ctx)
 		return
 	}
 	if httpResp.StatusCode < 200 || httpResp.StatusCode > 299 {
-		drainBody(httpResp.Body)
-		resp.Diagnostics.AddError("read failed", fmt.Sprintf("status %d", httpResp.StatusCode))
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError("read failed", fmt.Sprintf("status %d: %s", httpResp.StatusCode, string(bodyBytes)))
 		return
 	}
 
-	var out struct {
-		ID          string `json:"id"`
-		Name        string `json:"name"`
-		SSID        string `json:"ssid"`
-		Description string `json:"description,omitempty"`
-	}
+	var out wlanResponse
 	if err := json.NewDecoder(httpResp.Body).Decode(&out); err != nil {
 		resp.Diagnostics.AddError("decode failed", err.Error())
 		return
+	}
+	state.ID = types.StringValue(out.ID)
+	if out.ZoneID != "" {
+		state.ZoneID = types.StringValue(out.ZoneID)
 	}
 	state.Name = types.StringValue(out.Name)
 	state.SSID = types.StringValue(out.SSID)
@@ -367,6 +380,97 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	} else {
 		state.Description = types.StringNull()
 	}
+
+	if out.Security != nil {
+		state.Security = &WLANSecurityModel{}
+		if out.Security.Mode != "" {
+			state.Security.Mode = types.StringValue(out.Security.Mode)
+		} else {
+			state.Security.Mode = types.StringNull()
+		}
+		if out.Security.Passphrase != "" {
+			state.Security.Passphrase = types.StringValue(out.Security.Passphrase)
+		} else {
+			state.Security.Passphrase = types.StringNull()
+		}
+		if out.Security.AuthProfileID != "" {
+			state.Security.AuthProfileID = types.StringValue(out.Security.AuthProfileID)
+		} else {
+			state.Security.AuthProfileID = types.StringNull()
+		}
+		if out.Security.Encryption != "" {
+			state.Security.Encryption = types.StringValue(out.Security.Encryption)
+		} else {
+			state.Security.Encryption = types.StringNull()
+		}
+	} else {
+		state.Security = nil
+	}
+
+	if out.VLAN != nil {
+		state.VLAN = &WLANVLANModel{}
+		if out.VLAN.AccessVLAN != nil {
+			state.VLAN.AccessVLAN = types.Int64Value(int64(*out.VLAN.AccessVLAN))
+		} else {
+			state.VLAN.AccessVLAN = types.Int64Null()
+		}
+		if out.VLAN.DynamicVLAN != nil {
+			state.VLAN.DynamicVLAN = types.BoolValue(*out.VLAN.DynamicVLAN)
+		} else {
+			state.VLAN.DynamicVLAN = types.BoolNull()
+		}
+	} else {
+		state.VLAN = nil
+	}
+
+	if out.Radio != nil {
+		state.Radio = &WLANRadioModel{}
+		if out.Radio.Band != "" {
+			state.Radio.Band = types.StringValue(out.Radio.Band)
+		} else {
+			state.Radio.Band = types.StringNull()
+		}
+		if out.Radio.ClientIsolation != nil {
+			state.Radio.ClientIsolation = types.BoolValue(*out.Radio.ClientIsolation)
+		} else {
+			state.Radio.ClientIsolation = types.BoolNull()
+		}
+	} else {
+		state.Radio = nil
+	}
+
+	if out.Tunnel != nil {
+		state.Tunnel = &WLANTunnelModel{}
+		if out.Tunnel.Type != "" {
+			state.Tunnel.Type = types.StringValue(out.Tunnel.Type)
+		} else {
+			state.Tunnel.Type = types.StringNull()
+		}
+		if out.Tunnel.ProfileID != "" {
+			state.Tunnel.ProfileID = types.StringValue(out.Tunnel.ProfileID)
+		} else {
+			state.Tunnel.ProfileID = types.StringNull()
+		}
+	} else {
+		state.Tunnel = nil
+	}
+
+	if out.Advanced != nil {
+		state.Advanced = &WLANAdvancedModel{}
+		if out.Advanced.MinBSSRate != nil {
+			state.Advanced.MinBSSRate = types.Int64Value(int64(*out.Advanced.MinBSSRate))
+		} else {
+			state.Advanced.MinBSSRate = types.Int64Null()
+		}
+		if out.Advanced.OFDMA != nil {
+			state.Advanced.OFDMA = types.BoolValue(*out.Advanced.OFDMA)
+		} else {
+			state.Advanced.OFDMA = types.BoolNull()
+		}
+	} else {
+		state.Advanced = nil
+	}
+
 	resp.State.Set(ctx, &state)
 }
 
@@ -407,8 +511,8 @@ func (r *WLANResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}()
 
 	if httpResp.StatusCode < 200 || httpResp.StatusCode > 299 {
-		drainBody(httpResp.Body)
-		resp.Diagnostics.AddError("update failed", fmt.Sprintf("status %d", httpResp.StatusCode))
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError("update failed", fmt.Sprintf("status %d: %s", httpResp.StatusCode, string(bodyBytes)))
 		return
 	}
 	drainBody(httpResp.Body)
@@ -451,8 +555,8 @@ func (r *WLANResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 	// 404 on delete is typically safe to treat as "already gone".
 	if httpResp.StatusCode >= 400 && httpResp.StatusCode != http.StatusNotFound {
-		drainBody(httpResp.Body)
-		resp.Diagnostics.AddError("delete failed", fmt.Sprintf("status %d", httpResp.StatusCode))
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError("delete failed", fmt.Sprintf("status %d: %s", httpResp.StatusCode, string(bodyBytes)))
 		return
 	}
 	drainBody(httpResp.Body)
