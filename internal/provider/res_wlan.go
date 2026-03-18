@@ -325,8 +325,8 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	q := url.Values{}
 	q.Set("serviceTicket", r.client.ServiceTicket)
-	endpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlans/%s?%s",
-		r.client.BaseURL, r.client.APIVersion, state.ZoneID.ValueString(), state.ID.ValueString(), q.Encode())
+	endpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlans/?%s",
+		r.client.BaseURL, r.client.APIVersion, state.ZoneID.ValueString(), q.Encode())
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
