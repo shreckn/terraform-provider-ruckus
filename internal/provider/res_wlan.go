@@ -325,19 +325,19 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	q := url.Values{}
 	q.Set("serviceTicket", r.client.ServiceTicket)
-	endpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlans/%s?%s",
-		r.client.BaseURL, r.client.APIVersion, state.ZoneID.ValueString(), state.ID.ValueString(), q.Encode())
+	endpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlans/?%s",
+		r.client.BaseURL, r.client.APIVersion, state.ZoneID.ValueString(), q.Encode())
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		resp.Diagnostics.AddError("read failed", err.Error())
+		resp.Diagnostics.AddError("create read request failed", err.Error())
 		return
 	}
 	httpReq.Header.Set("Content-Type", "application/json;charset=UTF-8")
 
 	httpResp, err := r.client.HTTP.Do(httpReq)
 	if err != nil {
-		resp.Diagnostics.AddError("read failed", err.Error())
+		resp.Diagnostics.AddError("read request failed to send", err.Error())
 		return
 	}
 	defer func() {
@@ -352,7 +352,7 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	}
 	if httpResp.StatusCode < 200 || httpResp.StatusCode > 299 {
 		bodyBytes, _ := io.ReadAll(httpResp.Body)
-		resp.Diagnostics.AddError("read failed", fmt.Sprintf("status %d: %s", httpResp.StatusCode, string(bodyBytes)))
+		resp.Diagnostics.AddError("read request response out of range", fmt.Sprintf("status %d: %s at endpoint: %s", httpResp.StatusCode, string(bodyBytes), endpoint))
 		return
 	}
 
