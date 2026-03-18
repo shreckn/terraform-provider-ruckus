@@ -308,8 +308,9 @@ func (r *WLANGroupResource) Delete(ctx context.Context, req resource.DeleteReque
 }
 
 type createWLANGroupReq struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Members     *[]string `json:"members,omitempty"`
 }
 
 type wlanGroupMember struct {
