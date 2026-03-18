@@ -63,6 +63,23 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 		req.Description = plan.Description.ValueString()
 	}
 
+	if plan.Security != nil {
+		s := &wlanSecurity{}
+		if !plan.Security.Mode.IsNull() {
+			s.Mode = plan.Security.Mode.ValueString()
+		}
+		if !plan.Security.Passphrase.IsNull() {
+			s.Passphrase = plan.Security.Passphrase.ValueString()
+		}
+		if !plan.Security.AuthProfileID.IsNull() {
+			s.AuthProfileID = plan.Security.AuthProfileID.ValueString()
+		}
+		if !plan.Security.Encryption.IsNull() {
+			s.Encryption = plan.Security.Encryption.ValueString()
+		}
+		req.Security = s
+	}
+
 	if plan.VLAN != nil {
 		v := &wlanVLAN{}
 		if !plan.VLAN.AccessVLAN.IsNull() {
@@ -71,6 +88,43 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 		}
 		req.VLAN = v
 	}
+
+	if plan.Radio != nil {
+		r := &wlanRadio{}
+		if !plan.Radio.Band.IsNull() {
+			r.Band = plan.Radio.Band.ValueString()
+		}
+		if !plan.Radio.ClientIsolation.IsNull() {
+			ci := plan.Radio.ClientIsolation.ValueBool()
+			r.ClientIsolation = &ci
+		}
+		req.Radio = r
+	}
+
+	if plan.Tunnel != nil {
+		t := &wlanTunnel{}
+		if !plan.Tunnel.Type.IsNull() {
+			t.Type = plan.Tunnel.Type.ValueString()
+		}
+		if !plan.Tunnel.ProfileID.IsNull() {
+			t.ProfileID = plan.Tunnel.ProfileID.ValueString()
+		}
+		req.Tunnel = t
+	}
+
+	if plan.Advanced != nil {
+		a := &wlanAdvanced{}
+		if !plan.Advanced.MinBSSRate.IsNull() {
+			mbr := int(plan.Advanced.MinBSSRate.ValueInt64())
+			a.MinBSSRate = &mbr
+		}
+		if !plan.Advanced.OFDMA.IsNull() {
+			o := plan.Advanced.OFDMA.ValueBool()
+			a.OFDMA = &o
+		}
+		req.Advanced = a
+	}
+
 	return req
 }
 
@@ -179,10 +233,14 @@ type wlanAdvanced struct {
 }
 
 type createWLANReq struct {
-	Name        string    `json:"name"`
-	SSID        string    `json:"ssid"`
-	Description string    `json:"description,omitempty"`
-	VLAN        *wlanVLAN `json:"vlan,omitempty"`
+	Name        string        `json:"name"`
+	SSID        string        `json:"ssid"`
+	Description string        `json:"description,omitempty"`
+	Security    *wlanSecurity `json:"security,omitempty"`
+	VLAN        *wlanVLAN     `json:"vlan,omitempty"`
+	Radio       *wlanRadio    `json:"radio,omitempty"`
+	Tunnel      *wlanTunnel   `json:"tunnel,omitempty"`
+	Advanced    *wlanAdvanced `json:"advanced,omitempty"`
 }
 
 type createWLANResp struct {

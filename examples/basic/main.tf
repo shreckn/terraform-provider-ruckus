@@ -2,7 +2,7 @@ terraform {
   required_providers {
     ruckus = {
       source  = "nshreck/ruckus"
-      version = "0.0.1"
+      version =  ">= 0.0.5"
     }
   }
 }
@@ -15,12 +15,14 @@ provider "ruckus" {
   insecure_skip_verify = var.insecure
 }
 
-data "ruckus_zone" "zone" {
-  name = var.zone
+data "ruckus_zone" "zones" {
+  for_each    = toset(var.zones)
+  name    = each.value
 }
 
 resource "ruckus_wlan" "wlan" {
-  zone_id     = data.ruckus_zone.zone.id
+  for_each    = toset(var.zones)
+  zone_id     = data.ruckus_zone.zones[each.value].id
   name        = var.ssid
   ssid        = var.ssid
 
@@ -45,8 +47,9 @@ resource "ruckus_wlan" "wlan" {
   }
 }
 
-resource "ruckus_wlan_group" "corp_group" {
-  zone_id     = data.ruckus_zone.zone.id
-  name        = "Corporate WLAN Group"
-  description = "Group containing corporate WLANs"
+resource "ruckus_wlan_group" "group" {
+  for_each    = toset(var.zones)
+  zone_id     = data.ruckus_zone.zones[each.value].id
+  name    = "WLAN Group"
+  description = "Group containing WLANs"
 }
