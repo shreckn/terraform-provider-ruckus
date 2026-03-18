@@ -20,7 +20,7 @@ data "ruckus_zone" "zone" {
 }
 
 resource "ruckus_wlan" "wlan" {
-  zone_id     = data.ruckus_zone.hq.id
+  zone_id     = data.ruckus_zone.zone.id
   name        = var.ssid
   ssid        = var.ssid
 
@@ -32,7 +32,6 @@ resource "ruckus_wlan" "wlan" {
 
   vlan {
     access_vlan  = var.vlan
-    dynamic_vlan = false
   }
 
   radio {
@@ -47,8 +46,8 @@ resource "ruckus_wlan" "wlan" {
 }
 
 resource "ruckus_wlan_group" "corp_group" {
-  zone_id = data.ruckus_zone.hq.id
+  zone_id = data.ruckus_zone.zone.id
   name    = "Corporate WLAN Group"
   description = "Group containing corporate WLANs"
-  members = [ruckus_wlan.corp.id]
+  members = [ruckus_wlan.wlan.id]
 }

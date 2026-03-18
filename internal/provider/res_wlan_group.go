@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -136,13 +137,19 @@ func (r *WLANGroupResource) Create(ctx context.Context, req resource.CreateReque
 		}
 	}()
 
+	bodyBytes, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		resp.Diagnostics.AddError("create failed", fmt.Sprintf("failed to read response body: %v", err))
+		return
+	}
+
 	if httpResp.StatusCode != http.StatusCreated {
-		resp.Diagnostics.AddError("create failed", fmt.Sprintf("HTTP status %d", httpResp.StatusCode))
+		resp.Diagnostics.AddError("create failed", fmt.Sprintf("HTTP status %d: %s", httpResp.StatusCode, string(bodyBytes)))
 		return
 	}
 
 	var createResp createWLANGroupResp
-	if err := json.NewDecoder(httpResp.Body).Decode(&createResp); err != nil {
+	if err := json.Unmarshal(bodyBytes, &createResp); err != nil {
 		resp.Diagnostics.AddError("create failed", err.Error())
 		return
 	}
