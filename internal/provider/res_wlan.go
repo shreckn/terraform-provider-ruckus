@@ -27,14 +27,6 @@ type WLANEncryptionModel struct {
 type WLANVLANModel struct {
 	AccessVLAN types.Int64 `tfsdk:"access_vlan"`
 }
-type WLANRadioModel struct {
-	Band            types.String `tfsdk:"band"`
-	ClientIsolation types.Bool   `tfsdk:"client_isolation"`
-}
-type WLANTunnelModel struct {
-	Type      types.String `tfsdk:"type"`
-	ProfileID types.String `tfsdk:"profile_id"`
-}
 
 type WLANModel struct {
 	ID          types.String `tfsdk:"id"`
@@ -45,8 +37,6 @@ type WLANModel struct {
 
 	Encryption *WLANEncryptionModel `tfsdk:"encryption"`
 	VLAN       *WLANVLANModel       `tfsdk:"vlan"`
-	Radio      *WLANRadioModel      `tfsdk:"radio"`
-	Tunnel     *WLANTunnelModel     `tfsdk:"tunnel"`
 }
 
 func buildCreateWLANReq(plan *WLANModel) createWLANReq {
@@ -82,29 +72,6 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 			v.AccessVLAN = &av
 		}
 		req.VLAN = v
-	}
-
-	if plan.Radio != nil {
-		r := &wlanRadio{}
-		if !plan.Radio.Band.IsNull() {
-			r.Band = plan.Radio.Band.ValueString()
-		}
-		if !plan.Radio.ClientIsolation.IsNull() {
-			ci := plan.Radio.ClientIsolation.ValueBool()
-			r.ClientIsolation = &ci
-		}
-		req.Radio = r
-	}
-
-	if plan.Tunnel != nil {
-		t := &wlanTunnel{}
-		if !plan.Tunnel.Type.IsNull() {
-			t.Type = plan.Tunnel.Type.ValueString()
-		}
-		if !plan.Tunnel.ProfileID.IsNull() {
-			t.ProfileID = plan.Tunnel.ProfileID.ValueString()
-		}
-		req.Tunnel = t
 	}
 
 	return req
@@ -148,20 +115,6 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					"access_vlan": schema.Int64Attribute{Optional: true}, // static access VLAN
 				},
 			},
-			"radio": schema.SingleNestedBlock{
-				Attributes: map[string]schema.Attribute{
-					// "2.4", "5", "6", "both" (consult your API version; some expose per‑band flags)
-					"band":             schema.StringAttribute{Optional: true},
-					"client_isolation": schema.BoolAttribute{Optional: true},
-				},
-			},
-			"tunnel": schema.SingleNestedBlock{
-				Attributes: map[string]schema.Attribute{
-					// "none", "ruckus_gre", "soft_gre", "ipsec"
-					"type":       schema.StringAttribute{Optional: true},
-					"profile_id": schema.StringAttribute{Optional: true},
-				},
-			},
 		},
 	}
 }
@@ -190,26 +143,12 @@ type wlanVLAN struct {
 	AccessVLAN *int `json:"accessVlan,omitempty"`
 }
 
-// Radio/band
-type wlanRadio struct {
-	Band            string `json:"band,omitempty"` // "2.4","5","6","both" (verify)
-	ClientIsolation *bool  `json:"clientIsolation,omitempty"`
-}
-
-// Tunneling
-type wlanTunnel struct {
-	Type      string `json:"type,omitempty"`      // "ruckus_gre","soft_gre","ipsec"
-	ProfileID string `json:"profileId,omitempty"` // pre-created tunnel profile id
-}
-
 type createWLANReq struct {
 	Name        string          `json:"name"`
 	SSID        string          `json:"ssid"`
 	Description string          `json:"description,omitempty"`
 	Encryption  *wlanEncryption `json:"encryption,omitempty"`
 	VLAN        *wlanVLAN       `json:"vlan,omitempty"`
-	Radio       *wlanRadio      `json:"radio,omitempty"`
-	Tunnel      *wlanTunnel     `json:"tunnel,omitempty"`
 }
 
 type createWLANResp struct {
@@ -224,8 +163,6 @@ type wlanResponse struct {
 	Description string          `json:"description,omitempty"`
 	Encryption  *wlanEncryption `json:"encryption,omitempty"`
 	VLAN        *wlanVLAN       `json:"vlan,omitempty"`
-	Radio       *wlanRadio      `json:"radio,omitempty"`
-	Tunnel      *wlanTunnel     `json:"tunnel,omitempty"`
 }
 
 func (r *WLANResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -376,38 +313,6 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		}
 	} else {
 		state.VLAN = nil
-	}
-
-	if out.Radio != nil {
-		state.Radio = &WLANRadioModel{}
-		if out.Radio.Band != "" {
-			state.Radio.Band = types.StringValue(out.Radio.Band)
-		} else {
-			state.Radio.Band = types.StringNull()
-		}
-		if out.Radio.ClientIsolation != nil {
-			state.Radio.ClientIsolation = types.BoolValue(*out.Radio.ClientIsolation)
-		} else {
-			state.Radio.ClientIsolation = types.BoolNull()
-		}
-	} else {
-		state.Radio = nil
-	}
-
-	if out.Tunnel != nil {
-		state.Tunnel = &WLANTunnelModel{}
-		if out.Tunnel.Type != "" {
-			state.Tunnel.Type = types.StringValue(out.Tunnel.Type)
-		} else {
-			state.Tunnel.Type = types.StringNull()
-		}
-		if out.Tunnel.ProfileID != "" {
-			state.Tunnel.ProfileID = types.StringValue(out.Tunnel.ProfileID)
-		} else {
-			state.Tunnel.ProfileID = types.StringNull()
-		}
-	} else {
-		state.Tunnel = nil
 	}
 
 	resp.State.Set(ctx, &state)
