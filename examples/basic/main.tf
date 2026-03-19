@@ -26,10 +26,10 @@ resource "ruckus_wlan" "wlan" {
   name        = var.ssid
   ssid        = var.ssid
 
-  security {
+  encryption {
     mode        = "wpa2_psk"
     passphrase  = var.psk
-    encryption  = "ccmp"
+    algorithm  = "aes"
   }
 
   vlan {
@@ -39,11 +39,6 @@ resource "ruckus_wlan" "wlan" {
   radio {
     band             = var.band
     client_isolation = var.client_isolation
-  }
-
-  advanced {
-    min_bss_rate = 6000
-    ofdma        = true
   }
 }
 
