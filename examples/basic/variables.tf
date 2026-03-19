@@ -17,12 +17,7 @@ variable "psk" {
   sensitive = true
   type = string
 }
-variable "client_isolation" {
-  default = true
-  type = bool
-}
-variable "band" {
-  default = "both"
+variable "group_name" {
   type = string
 }
 variable "controller" {

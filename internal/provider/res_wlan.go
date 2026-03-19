@@ -100,8 +100,6 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					},
 					// PSK for *_psk modes
 					"passphrase": schema.StringAttribute{Optional: true, Sensitive: true},
-					// RADIUS / AAA profile id for 802.1X, or auth server reference
-					"auth_profile_id": schema.StringAttribute{Optional: true},
 					// algorithm hints if your firmware expects them (e.g., "AES", "TKIP_AES", "AES_GCMP_256")
 					"algorithm": schema.StringAttribute{Optional: true},
 				},

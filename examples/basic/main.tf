@@ -2,7 +2,7 @@ terraform {
   required_providers {
     ruckus = {
       source  = "nshreck/ruckus"
-      version =  ">= 0.0.5"
+      version =  ">= 0.0.8"
     }
   }
 }
@@ -27,24 +27,18 @@ resource "ruckus_wlan" "wlan" {
   ssid        = var.ssid
 
   encryption {
-    mode        = "wpa2_psk"
+    mode        = "WPA2"
     passphrase  = var.psk
-    algorithm  = "aes"
+    algorithm  = "AES"
   }
 
   vlan {
     access_vlan  = var.vlan
-  }
-
-  radio {
-    band             = var.band
-    client_isolation = var.client_isolation
   }
 }
 
 resource "ruckus_wlan_group" "group" {
   for_each    = toset(var.zones)
   zone_id     = data.ruckus_zone.zones[each.value].id
-  name    = "WLAN Group"
-  description = "Group containing WLANs"
+  name    = var.group_name
 }
