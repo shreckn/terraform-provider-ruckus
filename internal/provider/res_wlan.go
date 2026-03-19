@@ -18,11 +18,11 @@ import (
 
 type WLANResource struct{ client *APIClient }
 
-type WLANSecurityModel struct {
+type WLANEncryptionModel struct {
 	Mode          types.String `tfsdk:"mode"`
 	Passphrase    types.String `tfsdk:"passphrase"`
 	AuthProfileID types.String `tfsdk:"auth_profile_id"`
-	Encryption    types.String `tfsdk:"encryption"`
+	Algorithm     types.String `tfsdk:"algorithm"`
 }
 type WLANVLANModel struct {
 	AccessVLAN types.Int64 `tfsdk:"access_vlan"`
@@ -35,10 +35,6 @@ type WLANTunnelModel struct {
 	Type      types.String `tfsdk:"type"`
 	ProfileID types.String `tfsdk:"profile_id"`
 }
-type WLANAdvancedModel struct {
-	MinBSSRate types.Int64 `tfsdk:"min_bss_rate"`
-	OFDMA      types.Bool  `tfsdk:"ofdma"`
-}
 
 type WLANModel struct {
 	ID          types.String `tfsdk:"id"`
@@ -47,11 +43,10 @@ type WLANModel struct {
 	SSID        types.String `tfsdk:"ssid"`
 	Description types.String `tfsdk:"description"`
 
-	Security *WLANSecurityModel `tfsdk:"security"`
-	VLAN     *WLANVLANModel     `tfsdk:"vlan"`
-	Radio    *WLANRadioModel    `tfsdk:"radio"`
-	Tunnel   *WLANTunnelModel   `tfsdk:"tunnel"`
-	Advanced *WLANAdvancedModel `tfsdk:"advanced"`
+	Encryption *WLANEncryptionModel `tfsdk:"encryption"`
+	VLAN       *WLANVLANModel       `tfsdk:"vlan"`
+	Radio      *WLANRadioModel      `tfsdk:"radio"`
+	Tunnel     *WLANTunnelModel     `tfsdk:"tunnel"`
 }
 
 func buildCreateWLANReq(plan *WLANModel) createWLANReq {
@@ -63,21 +58,21 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 		req.Description = plan.Description.ValueString()
 	}
 
-	if plan.Security != nil {
-		s := &wlanSecurity{}
-		if !plan.Security.Mode.IsNull() {
-			s.Mode = plan.Security.Mode.ValueString()
+	if plan.Encryption != nil {
+		s := &wlanEncryption{}
+		if !plan.Encryption.Mode.IsNull() {
+			s.Mode = plan.Encryption.Mode.ValueString()
 		}
-		if !plan.Security.Passphrase.IsNull() {
-			s.Passphrase = plan.Security.Passphrase.ValueString()
+		if !plan.Encryption.Passphrase.IsNull() {
+			s.Passphrase = plan.Encryption.Passphrase.ValueString()
 		}
-		if !plan.Security.AuthProfileID.IsNull() {
-			s.AuthProfileID = plan.Security.AuthProfileID.ValueString()
+		if !plan.Encryption.AuthProfileID.IsNull() {
+			s.AuthProfileID = plan.Encryption.AuthProfileID.ValueString()
 		}
-		if !plan.Security.Encryption.IsNull() {
-			s.Encryption = plan.Security.Encryption.ValueString()
+		if !plan.Encryption.Algorithm.IsNull() {
+			s.Algorithm = plan.Encryption.Algorithm.ValueString()
 		}
-		req.Security = s
+		req.Encryption = s
 	}
 
 	if plan.VLAN != nil {
@@ -112,19 +107,6 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 		req.Tunnel = t
 	}
 
-	if plan.Advanced != nil {
-		a := &wlanAdvanced{}
-		if !plan.Advanced.MinBSSRate.IsNull() {
-			mbr := int(plan.Advanced.MinBSSRate.ValueInt64())
-			a.MinBSSRate = &mbr
-		}
-		if !plan.Advanced.OFDMA.IsNull() {
-			o := plan.Advanced.OFDMA.ValueBool()
-			a.OFDMA = &o
-		}
-		req.Advanced = a
-	}
-
 	return req
 }
 
@@ -144,7 +126,7 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"description": schema.StringAttribute{Optional: true},
 		},
 		Blocks: map[string]schema.Block{
-			"security": schema.SingleNestedBlock{
+			"encryption": schema.SingleNestedBlock{
 				Attributes: map[string]schema.Attribute{
 					// e.g. "open", "wep", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "wpa3_enterprise", "webauth", "wispr", "owe"
 					"mode": schema.StringAttribute{
@@ -157,8 +139,8 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					"passphrase": schema.StringAttribute{Optional: true, Sensitive: true},
 					// RADIUS / AAA profile id for 802.1X, or auth server reference
 					"auth_profile_id": schema.StringAttribute{Optional: true},
-					// encryption hints if your firmware expects them (e.g., "ccmp", "tkip_ccmp", "sae", "owe")
-					"encryption": schema.StringAttribute{Optional: true},
+					// algorithm hints if your firmware expects them (e.g., "ccmp", "tkip_ccmp", "sae", "owe")
+					"algorithm": schema.StringAttribute{Optional: true},
 				},
 			},
 			"vlan": schema.SingleNestedBlock{
@@ -180,12 +162,6 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					"profile_id": schema.StringAttribute{Optional: true},
 				},
 			},
-			"advanced": schema.SingleNestedBlock{
-				Attributes: map[string]schema.Attribute{
-					"min_bss_rate": schema.Int64Attribute{Optional: true}, // minimum basic rate (kbps)
-					"ofdma":        schema.BoolAttribute{Optional: true},  // if supported by firmware/band
-				},
-			},
 		},
 	}
 }
@@ -197,8 +173,8 @@ func (r *WLANResource) Configure(_ context.Context, req resource.ConfigureReques
 }
 
 // ---- API payloads (example fields; verify against your controller OpenAPI) ----
-// Security
-type wlanSecurity struct {
+// Encryption
+type wlanEncryption struct {
 	// e.g., "open", "wep", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "wpa3_enterprise", "webauth", "wispr", "owe"
 	Mode string `json:"method,omitempty"`
 	// For PSK modes
@@ -206,7 +182,7 @@ type wlanSecurity struct {
 	// AAA / RADIUS profile
 	AuthProfileID string `json:"authServerId,omitempty"`
 	// e.g., "ccmp", "tkip_ccmp", "sae", "owe" (depends on mode)
-	Encryption string `json:"encryption,omitempty"`
+	Algorithm string `json:"algorithm,omitempty"`
 }
 
 // VLAN
@@ -226,21 +202,14 @@ type wlanTunnel struct {
 	ProfileID string `json:"profileId,omitempty"` // pre-created tunnel profile id
 }
 
-// Advanced
-type wlanAdvanced struct {
-	MinBSSRate *int  `json:"minBssRate,omitempty"` // kbps
-	OFDMA      *bool `json:"ofdma,omitempty"`
-}
-
 type createWLANReq struct {
-	Name        string        `json:"name"`
-	SSID        string        `json:"ssid"`
-	Description string        `json:"description,omitempty"`
-	Security    *wlanSecurity `json:"security,omitempty"`
-	VLAN        *wlanVLAN     `json:"vlan,omitempty"`
-	Radio       *wlanRadio    `json:"radio,omitempty"`
-	Tunnel      *wlanTunnel   `json:"tunnel,omitempty"`
-	Advanced    *wlanAdvanced `json:"advanced,omitempty"`
+	Name        string          `json:"name"`
+	SSID        string          `json:"ssid"`
+	Description string          `json:"description,omitempty"`
+	Encryption  *wlanEncryption `json:"encryption,omitempty"`
+	VLAN        *wlanVLAN       `json:"vlan,omitempty"`
+	Radio       *wlanRadio      `json:"radio,omitempty"`
+	Tunnel      *wlanTunnel     `json:"tunnel,omitempty"`
 }
 
 type createWLANResp struct {
@@ -248,16 +217,15 @@ type createWLANResp struct {
 }
 
 type wlanResponse struct {
-	ID          string        `json:"id"`
-	ZoneID      string        `json:"zoneId,omitempty"`
-	Name        string        `json:"name"`
-	SSID        string        `json:"ssid"`
-	Description string        `json:"description,omitempty"`
-	Security    *wlanSecurity `json:"security,omitempty"`
-	VLAN        *wlanVLAN     `json:"vlan,omitempty"`
-	Radio       *wlanRadio    `json:"radio,omitempty"`
-	Tunnel      *wlanTunnel   `json:"tunnel,omitempty"`
-	Advanced    *wlanAdvanced `json:"advanced,omitempty"`
+	ID          string          `json:"id"`
+	ZoneID      string          `json:"zoneId,omitempty"`
+	Name        string          `json:"name"`
+	SSID        string          `json:"ssid"`
+	Description string          `json:"description,omitempty"`
+	Encryption  *wlanEncryption `json:"encryption,omitempty"`
+	VLAN        *wlanVLAN       `json:"vlan,omitempty"`
+	Radio       *wlanRadio      `json:"radio,omitempty"`
+	Tunnel      *wlanTunnel     `json:"tunnel,omitempty"`
 }
 
 func (r *WLANResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -373,30 +341,30 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		state.Description = types.StringNull()
 	}
 
-	if out.Security != nil {
-		state.Security = &WLANSecurityModel{}
-		if out.Security.Mode != "" {
-			state.Security.Mode = types.StringValue(out.Security.Mode)
+	if out.Encryption != nil {
+		state.Encryption = &WLANEncryptionModel{}
+		if out.Encryption.Mode != "" {
+			state.Encryption.Mode = types.StringValue(out.Encryption.Mode)
 		} else {
-			state.Security.Mode = types.StringNull()
+			state.Encryption.Mode = types.StringNull()
 		}
-		if out.Security.Passphrase != "" {
-			state.Security.Passphrase = types.StringValue(out.Security.Passphrase)
+		if out.Encryption.Passphrase != "" {
+			state.Encryption.Passphrase = types.StringValue(out.Encryption.Passphrase)
 		} else {
-			state.Security.Passphrase = types.StringNull()
+			state.Encryption.Passphrase = types.StringNull()
 		}
-		if out.Security.AuthProfileID != "" {
-			state.Security.AuthProfileID = types.StringValue(out.Security.AuthProfileID)
+		if out.Encryption.AuthProfileID != "" {
+			state.Encryption.AuthProfileID = types.StringValue(out.Encryption.AuthProfileID)
 		} else {
-			state.Security.AuthProfileID = types.StringNull()
+			state.Encryption.AuthProfileID = types.StringNull()
 		}
-		if out.Security.Encryption != "" {
-			state.Security.Encryption = types.StringValue(out.Security.Encryption)
+		if out.Encryption.Algorithm != "" {
+			state.Encryption.Algorithm = types.StringValue(out.Encryption.Algorithm)
 		} else {
-			state.Security.Encryption = types.StringNull()
+			state.Encryption.Algorithm = types.StringNull()
 		}
 	} else {
-		state.Security = nil
+		state.Encryption = nil
 	}
 
 	if out.VLAN != nil {
@@ -440,22 +408,6 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		}
 	} else {
 		state.Tunnel = nil
-	}
-
-	if out.Advanced != nil {
-		state.Advanced = &WLANAdvancedModel{}
-		if out.Advanced.MinBSSRate != nil {
-			state.Advanced.MinBSSRate = types.Int64Value(int64(*out.Advanced.MinBSSRate))
-		} else {
-			state.Advanced.MinBSSRate = types.Int64Null()
-		}
-		if out.Advanced.OFDMA != nil {
-			state.Advanced.OFDMA = types.BoolValue(*out.Advanced.OFDMA)
-		} else {
-			state.Advanced.OFDMA = types.BoolNull()
-		}
-	} else {
-		state.Advanced = nil
 	}
 
 	resp.State.Set(ctx, &state)
