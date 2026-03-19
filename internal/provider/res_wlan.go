@@ -128,18 +128,18 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 		Blocks: map[string]schema.Block{
 			"encryption": schema.SingleNestedBlock{
 				Attributes: map[string]schema.Attribute{
-					// e.g. "open", "wep", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "wpa3_enterprise", "webauth", "wispr", "owe"
+					// e.g. "WPA2", "WPA_Mixed", "WEP_64", "WEP_128", "None", "WPA3", "WPA23_Mixed", "OWE", "OWE_Transition"
 					"mode": schema.StringAttribute{
 						Optional: true,
 						Validators: []validator.String{
-							stringvalidator.OneOf("open", "wep", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "wpa3_enterprise", "webauth", "wispr", "owe"),
+							stringvalidator.OneOf("WPA2", "WPA_Mixed", "WEP_64", "WEP_128", "None", "WPA3", "WPA23_Mixed", "OWE", "OWE_Transition"),
 						},
 					},
 					// PSK for *_psk modes
 					"passphrase": schema.StringAttribute{Optional: true, Sensitive: true},
 					// RADIUS / AAA profile id for 802.1X, or auth server reference
 					"auth_profile_id": schema.StringAttribute{Optional: true},
-					// algorithm hints if your firmware expects them (e.g., "ccmp", "tkip_ccmp", "sae", "owe")
+					// algorithm hints if your firmware expects them (e.g., "AES", "TKIP_AES", "AES_GCMP_256")
 					"algorithm": schema.StringAttribute{Optional: true},
 				},
 			},
@@ -175,7 +175,7 @@ func (r *WLANResource) Configure(_ context.Context, req resource.ConfigureReques
 // ---- API payloads (example fields; verify against your controller OpenAPI) ----
 // Encryption
 type wlanEncryption struct {
-	// e.g., "open", "wep", "wpa2_psk", "wpa3_sae", "wpa2_wpa3_mixed", "8021x", "wpa3_enterprise", "webauth", "wispr", "owe"
+	// e.g., "WPA2", "WPA_Mixed", "WEP_64", "WEP_128", "None", "WPA3", "WPA23_Mixed", "OWE", "OWE_Transition"
 	Mode string `json:"method,omitempty"`
 	// For PSK modes
 	Passphrase string `json:"passphrase,omitempty"`
