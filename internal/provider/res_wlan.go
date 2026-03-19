@@ -19,10 +19,9 @@ import (
 type WLANResource struct{ client *APIClient }
 
 type WLANEncryptionModel struct {
-	Mode          types.String `tfsdk:"mode"`
-	Passphrase    types.String `tfsdk:"passphrase"`
-	AuthProfileID types.String `tfsdk:"auth_profile_id"`
-	Algorithm     types.String `tfsdk:"algorithm"`
+	Mode       types.String `tfsdk:"mode"`
+	Passphrase types.String `tfsdk:"passphrase"`
+	Algorithm  types.String `tfsdk:"algorithm"`
 }
 type WLANVLANModel struct {
 	AccessVLAN types.Int64 `tfsdk:"access_vlan"`
@@ -55,9 +54,6 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 		}
 		if !plan.Encryption.Passphrase.IsNull() {
 			s.Passphrase = plan.Encryption.Passphrase.ValueString()
-		}
-		if !plan.Encryption.AuthProfileID.IsNull() {
-			s.AuthProfileID = plan.Encryption.AuthProfileID.ValueString()
 		}
 		if !plan.Encryption.Algorithm.IsNull() {
 			s.Algorithm = plan.Encryption.Algorithm.ValueString()
@@ -132,8 +128,6 @@ type wlanEncryption struct {
 	Mode string `json:"method,omitempty"`
 	// For PSK modes
 	Passphrase string `json:"passphrase,omitempty"`
-	// AAA / RADIUS profile
-	AuthProfileID string `json:"authServerId,omitempty"`
 	// e.g., "ccmp", "tkip_ccmp", "sae", "owe" (depends on mode)
 	Algorithm string `json:"algorithm,omitempty"`
 }
@@ -289,11 +283,6 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 			state.Encryption.Passphrase = types.StringValue(out.Encryption.Passphrase)
 		} else {
 			state.Encryption.Passphrase = types.StringNull()
-		}
-		if out.Encryption.AuthProfileID != "" {
-			state.Encryption.AuthProfileID = types.StringValue(out.Encryption.AuthProfileID)
-		} else {
-			state.Encryption.AuthProfileID = types.StringNull()
 		}
 		if out.Encryption.Algorithm != "" {
 			state.Encryption.Algorithm = types.StringValue(out.Encryption.Algorithm)
