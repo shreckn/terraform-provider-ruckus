@@ -147,13 +147,13 @@ type createWLANReq struct {
 	VLAN        *wlanVLAN       `json:"vlan,omitempty"`
 }
 
-type createWLANResp struct {
+type wlanID struct {
 	ID string `json:"id"`
 }
 
-type addMemberReq struct {
-	ID string `json:"id"`
-}
+type createWLANResp wlanID
+
+type addMemberReq wlanID
 
 type wlanResponse struct {
 	ID          string          `json:"id"`
@@ -219,7 +219,7 @@ func (r *WLANResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if !plan.GroupID.IsNull() && !plan.GroupID.IsUnknown() {
 		addEndpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups/%s/members?%s",
 			r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), plan.GroupID.ValueString(), q.Encode())
-		addPayload := addMemberReq{ID: cr.ID}
+		addPayload := addMemberReq(cr)
 		addBody, _ := json.Marshal(addPayload)
 		addReq, err := http.NewRequestWithContext(ctx, http.MethodPost, addEndpoint, bytes.NewReader(addBody))
 		if err != nil {
