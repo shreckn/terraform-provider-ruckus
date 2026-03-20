@@ -21,7 +21,8 @@ type WLANGroupModel struct {
 	ZoneID      types.String `tfsdk:"zone_id"`
 	Name        types.String `tfsdk:"name"`
 	Description types.String `tfsdk:"description"`
-	Members     types.List   `tfsdk:"members"` // list of WLAN IDs
+	WLANIds     types.List   `tfsdk:"wlan_ids"` // list of WLAN IDs to add/manage
+	Members     types.List   `tfsdk:"members"`  // list of WLAN IDs (computed from API)
 }
 
 func NewWLANGroupResource() resource.Resource {
@@ -50,6 +51,11 @@ func (r *WLANGroupResource) Schema(_ context.Context, _ resource.SchemaRequest, 
 			},
 			"description": schema.StringAttribute{
 				Description: "Description of the WLAN Group.",
+				Optional:    true,
+			},
+			"wlan_ids": schema.ListAttribute{
+				Description: "List of WLAN IDs to add to this group. Can be existing WLANs or newly created ones.",
+				ElementType: types.StringType,
 				Optional:    true,
 			},
 			"members": schema.ListAttribute{
@@ -149,6 +155,46 @@ func (r *WLANGroupResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	plan.ID = types.StringValue(createResp.ID)
+
+	// Add WLANs to the group if specified
+	var wlanIds []string
+	if !plan.WLANIds.IsNull() && !plan.WLANIds.IsUnknown() {
+		plan.WLANIds.ElementsAs(ctx, &wlanIds, false)
+		for _, wlanID := range wlanIds {
+			q3 := url.Values{}
+			q3.Set("serviceTicket", r.client.ServiceTicket)
+			addMemberEndpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups/%s/members?%s",
+				r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), plan.ID.ValueString(), q3.Encode())
+
+			addPayload := addWLANToGroupReq{ID: wlanID}
+			addBody, _ := json.Marshal(addPayload)
+
+			addReq, err := http.NewRequestWithContext(ctx, http.MethodPost, addMemberEndpoint, bytes.NewReader(addBody))
+			if err != nil {
+				resp.Diagnostics.AddError("add wlan to group failed", err.Error())
+				return
+			}
+			addReq.Header.Set("Content-Type", "application/json;charset=UTF-8")
+
+			addResp, err := r.client.HTTP.Do(addReq)
+			if err != nil {
+				resp.Diagnostics.AddError("add wlan to group failed", err.Error())
+				return
+			}
+			defer func() {
+				if cerr := addResp.Body.Close(); cerr != nil {
+					resp.Diagnostics.AddWarning("add member response close failed", cerr.Error())
+				}
+			}()
+
+			if addResp.StatusCode < 200 || addResp.StatusCode > 299 {
+				bodyBytes, _ := io.ReadAll(addResp.Body)
+				resp.Diagnostics.AddError("add wlan to group failed", fmt.Sprintf("HTTP status %d: %s", addResp.StatusCode, string(bodyBytes)))
+				return
+			}
+			drainBody(addResp.Body)
+		}
+	}
 
 	// Read the created resource to populate computed fields (members)
 	q2 := url.Values{}
@@ -315,6 +361,90 @@ func (r *WLANGroupResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
+	// Add WLANs to the group if specified
+	var wlanIds []string
+	if !plan.WLANIds.IsNull() && !plan.WLANIds.IsUnknown() {
+		plan.WLANIds.ElementsAs(ctx, &wlanIds, false)
+		for _, wlanID := range wlanIds {
+			q3 := url.Values{}
+			q3.Set("serviceTicket", r.client.ServiceTicket)
+			addMemberEndpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups/%s/members?%s",
+				r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), plan.ID.ValueString(), q3.Encode())
+
+			addPayload := addWLANToGroupReq{ID: wlanID}
+			addBody, _ := json.Marshal(addPayload)
+
+			addReq, err := http.NewRequestWithContext(ctx, http.MethodPost, addMemberEndpoint, bytes.NewReader(addBody))
+			if err != nil {
+				resp.Diagnostics.AddError("add wlan to group failed", err.Error())
+				return
+			}
+			addReq.Header.Set("Content-Type", "application/json;charset=UTF-8")
+
+			addResp, err := r.client.HTTP.Do(addReq)
+			if err != nil {
+				resp.Diagnostics.AddError("add wlan to group failed", err.Error())
+				return
+			}
+			defer func() {
+				if cerr := addResp.Body.Close(); cerr != nil {
+					resp.Diagnostics.AddWarning("add member response close failed", cerr.Error())
+				}
+			}()
+
+			if addResp.StatusCode < 200 || addResp.StatusCode > 299 {
+				bodyBytes, _ := io.ReadAll(addResp.Body)
+				resp.Diagnostics.AddError("add wlan to group failed", fmt.Sprintf("HTTP status %d: %s", addResp.StatusCode, string(bodyBytes)))
+				return
+			}
+			drainBody(addResp.Body)
+		}
+	}
+
+	// Read the updated resource to populate computed fields (members)
+	q2 := url.Values{}
+	q2.Set("serviceTicket", r.client.ServiceTicket)
+	readEndpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups/%s?%s",
+		r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), plan.ID.ValueString(), q2.Encode())
+
+	readReq, err := http.NewRequestWithContext(ctx, http.MethodGet, readEndpoint, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("update failed", fmt.Sprintf("failed to read updated resource: %v", err))
+		return
+	}
+
+	readResp, err := r.client.HTTP.Do(readReq)
+	if err != nil {
+		resp.Diagnostics.AddError("update failed", fmt.Sprintf("failed to read updated resource: %v", err))
+		return
+	}
+	defer func() {
+		if cerr := readResp.Body.Close(); cerr != nil {
+			resp.Diagnostics.AddWarning("failed to close read response body", cerr.Error())
+		}
+	}()
+
+	if readResp.StatusCode == http.StatusOK {
+		var readRespData readWLANGroupResp
+		if err := json.NewDecoder(readResp.Body).Decode(&readRespData); err != nil {
+			resp.Diagnostics.AddError("update failed", fmt.Sprintf("failed to decode read response: %v", err))
+			return
+		}
+
+		// Update plan with data from read
+		if readRespData.Description != "" {
+			plan.Description = types.StringValue(readRespData.Description)
+		} else {
+			plan.Description = types.StringNull()
+		}
+
+		members := make([]string, 0, len(readRespData.Members))
+		for _, m := range readRespData.Members {
+			members = append(members, m.ID)
+		}
+		plan.Members, _ = types.ListValueFrom(ctx, types.StringType, members)
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &plan)...)
 }
 
@@ -377,4 +507,8 @@ type readWLANGroupResp struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
 	Members     []wlanGroupMember `json:"members"`
+}
+
+type addWLANToGroupReq struct {
+	ID string `json:"id"`
 }
