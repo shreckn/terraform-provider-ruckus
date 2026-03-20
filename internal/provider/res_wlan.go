@@ -30,6 +30,10 @@ type WLANAccessTunnelProfileModel struct {
 	Name types.String `tfsdk:"name"`
 }
 
+type WLANAdvancedOptionsModel struct {
+	ClientIsolationEnabled types.Bool `tfsdk:"client_isolation_enabled"`
+}
+
 type WLANModel struct {
 	ID          types.String `tfsdk:"id"`
 	ZoneID      types.String `tfsdk:"zone_id"`
@@ -41,6 +45,7 @@ type WLANModel struct {
 	Encryption          *WLANEncryptionModel          `tfsdk:"encryption"`
 	VLAN                *WLANVLANModel                `tfsdk:"vlan"`
 	AccessTunnelProfile *WLANAccessTunnelProfileModel `tfsdk:"access_tunnel_profile"`
+	AdvancedOptions     *WLANAdvancedOptionsModel     `tfsdk:"advanced_options"`
 }
 
 func buildCreateWLANReq(plan *WLANModel) createWLANReq {
@@ -83,6 +88,15 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 			atp.Name = plan.AccessTunnelProfile.Name.ValueString()
 		}
 		req.AccessTunnelProfile = atp
+	}
+
+	if plan.AdvancedOptions != nil {
+		ao := &wlanAdvancedOptions{}
+		if !plan.AdvancedOptions.ClientIsolationEnabled.IsNull() {
+			cie := plan.AdvancedOptions.ClientIsolationEnabled.ValueBool()
+			ao.ClientIsolationEnabled = &cie
+		}
+		req.AdvancedOptions = ao
 	}
 
 	return req
@@ -130,6 +144,11 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					"name": schema.StringAttribute{Required: true},
 				},
 			},
+			"advanced_options": schema.SingleNestedBlock{
+				Attributes: map[string]schema.Attribute{
+					"client_isolation_enabled": schema.BoolAttribute{Optional: true},
+				},
+			},
 		},
 	}
 }
@@ -160,6 +179,10 @@ type wlanAccessTunnelProfile struct {
 	Name string `json:"name,omitempty"`
 }
 
+type wlanAdvancedOptions struct {
+	ClientIsolationEnabled *bool `json:"clientIsolationEnabled,omitempty"`
+}
+
 type createWLANReq struct {
 	Name                string                   `json:"name"`
 	SSID                string                   `json:"ssid"`
@@ -169,6 +192,7 @@ type createWLANReq struct {
 	VLAN                *wlanVLAN                `json:"vlan,omitempty"`
 	AccessTunnelType    string                   `json:"accessTunnelType,omitempty"`
 	AccessTunnelProfile *wlanAccessTunnelProfile `json:"accessTunnelProfile,omitempty"`
+	AdvancedOptions     *wlanAdvancedOptions     `json:"advancedOptions,omitempty"`
 }
 
 type wlanID struct {
@@ -189,6 +213,7 @@ type wlanResponse struct {
 	Encryption          *wlanEncryption          `json:"encryption,omitempty"`
 	VLAN                *wlanVLAN                `json:"vlan,omitempty"`
 	AccessTunnelProfile *wlanAccessTunnelProfile `json:"accessTunnelProfile,omitempty"`
+	AdvancedOptions     *wlanAdvancedOptions     `json:"advancedOptions,omitempty"`
 }
 
 func (r *WLANResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -445,6 +470,17 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		}
 	} else {
 		state.AccessTunnelProfile = nil
+	}
+
+	if out.AdvancedOptions != nil {
+		state.AdvancedOptions = &WLANAdvancedOptionsModel{}
+		if out.AdvancedOptions.ClientIsolationEnabled != nil {
+			state.AdvancedOptions.ClientIsolationEnabled = types.BoolValue(*out.AdvancedOptions.ClientIsolationEnabled)
+		} else {
+			state.AdvancedOptions.ClientIsolationEnabled = types.BoolNull()
+		}
+	} else {
+		state.AdvancedOptions = nil
 	}
 
 	resp.State.Set(ctx, &state)
