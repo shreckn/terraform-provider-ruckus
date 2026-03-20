@@ -78,8 +78,7 @@ func (r *WLANGroupResource) Configure(_ context.Context, req resource.ConfigureR
 
 func buildCreateWLANGroupReq(plan *WLANGroupModel) (createWLANGroupReq, error) {
 	req := createWLANGroupReq{
-		Name:             plan.Name.ValueString(),
-		AccessTunnelType: "RuckusGRE",
+		Name: plan.Name.ValueString(),
 	}
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
 		req.Description = plan.Description.ValueString()
@@ -361,10 +360,9 @@ func (r *WLANGroupResource) Delete(ctx context.Context, req resource.DeleteReque
 }
 
 type createWLANGroupReq struct {
-	Name             string    `json:"name"`
-	Description      string    `json:"description,omitempty"`
-	Members          *[]string `json:"members,omitempty"`
-	AccessTunnelType string    `json:"accessTunnelType,omitempty"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	Members     *[]string `json:"members,omitempty"`
 }
 
 type wlanGroupMember struct {
