@@ -36,6 +36,9 @@ resource "ruckus_wlan" "wlan" {
   vlan {
     access_vlan  = var.vlan
   }
+  access_tunnel_profile {
+    name = "Dev-Dataplane"
+  }
 }
 
 resource "ruckus_wlan_group" "group" {
