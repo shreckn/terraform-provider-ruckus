@@ -2,7 +2,7 @@ terraform {
   required_providers {
     ruckus = {
       source  = "nshreck/ruckus"
-      version =  ">= 0.0.12"
+      version =  ">= 0.0.16"
     }
   }
 }
@@ -37,7 +37,7 @@ resource "ruckus_wlan" "wlan" {
     access_vlan  = var.vlan
   }
   access_tunnel_profile {
-    name = "Dev-Dataplane"
+    name = var.dataplane_name
   }
 }
 
