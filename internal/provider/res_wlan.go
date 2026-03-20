@@ -26,6 +26,9 @@ type WLANEncryptionModel struct {
 type WLANVLANModel struct {
 	AccessVLAN types.Int64 `tfsdk:"access_vlan"`
 }
+type WLANAccessTunnelProfileModel struct {
+	Name types.String `tfsdk:"name"`
+}
 
 type WLANModel struct {
 	ID          types.String `tfsdk:"id"`
@@ -35,15 +38,15 @@ type WLANModel struct {
 	Description types.String `tfsdk:"description"`
 	GroupID     types.String `tfsdk:"group_id"`
 
-	Encryption *WLANEncryptionModel `tfsdk:"encryption"`
-	VLAN       *WLANVLANModel       `tfsdk:"vlan"`
+	Encryption          *WLANEncryptionModel          `tfsdk:"encryption"`
+	VLAN                *WLANVLANModel                `tfsdk:"vlan"`
+	AccessTunnelProfile *WLANAccessTunnelProfileModel `tfsdk:"access_tunnel_profile"`
 }
 
 func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 	req := createWLANReq{
-		Name:             plan.Name.ValueString(),
-		SSID:             plan.SSID.ValueString(),
-		AccessTunnelType: "RuckusGRE",
+		Name: plan.Name.ValueString(),
+		SSID: plan.SSID.ValueString(),
 	}
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
 		req.Description = plan.Description.ValueString()
@@ -113,6 +116,11 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 					"access_vlan": schema.Int64Attribute{Optional: true}, // static access VLAN
 				},
 			},
+			"access_tunnel_profile": schema.SingleNestedBlock{
+				Attributes: map[string]schema.Attribute{
+					"name": schema.StringAttribute{Required: true},
+				},
+			},
 		},
 	}
 }
@@ -140,13 +148,12 @@ type wlanVLAN struct {
 }
 
 type createWLANReq struct {
-	Name             string          `json:"name"`
-	SSID             string          `json:"ssid"`
-	Description      string          `json:"description,omitempty"`
-	GroupID          string          `json:"groupId,omitempty"`
-	Encryption       *wlanEncryption `json:"encryption,omitempty"`
-	VLAN             *wlanVLAN       `json:"vlan,omitempty"`
-	AccessTunnelType string          `json:"accessTunnelType,omitempty"`
+	Name        string          `json:"name"`
+	SSID        string          `json:"ssid"`
+	Description string          `json:"description,omitempty"`
+	GroupID     string          `json:"groupId,omitempty"`
+	Encryption  *wlanEncryption `json:"encryption,omitempty"`
+	VLAN        *wlanVLAN       `json:"vlan,omitempty"`
 }
 
 type wlanID struct {
