@@ -77,6 +77,14 @@ func buildCreateWLANReq(plan *WLANModel) createWLANReq {
 		req.VLAN = v
 	}
 
+	if plan.AccessTunnelProfile != nil {
+		atp := &wlanAccessTunnelProfile{}
+		if !plan.AccessTunnelProfile.Name.IsNull() {
+			atp.Name = plan.AccessTunnelProfile.Name.ValueString()
+		}
+		req.AccessTunnelProfile = atp
+	}
+
 	return req
 }
 
@@ -148,14 +156,19 @@ type wlanVLAN struct {
 	AccessVLAN *int `json:"accessVlan,omitempty"`
 }
 
+type wlanAccessTunnelProfile struct {
+	Name string `json:"name,omitempty"`
+}
+
 type createWLANReq struct {
-	Name             string          `json:"name"`
-	SSID             string          `json:"ssid"`
-	Description      string          `json:"description,omitempty"`
-	GroupID          string          `json:"groupId,omitempty"`
-	Encryption       *wlanEncryption `json:"encryption,omitempty"`
-	VLAN             *wlanVLAN       `json:"vlan,omitempty"`
-	AccessTunnelType string          `json:"accessTunnelType,omitempty"`
+	Name                string                   `json:"name"`
+	SSID                string                   `json:"ssid"`
+	Description         string                   `json:"description,omitempty"`
+	GroupID             string                   `json:"groupId,omitempty"`
+	Encryption          *wlanEncryption          `json:"encryption,omitempty"`
+	VLAN                *wlanVLAN                `json:"vlan,omitempty"`
+	AccessTunnelType    string                   `json:"accessTunnelType,omitempty"`
+	AccessTunnelProfile *wlanAccessTunnelProfile `json:"accessTunnelProfile,omitempty"`
 }
 
 type wlanID struct {
@@ -167,14 +180,15 @@ type createWLANResp wlanID
 type addMemberReq wlanID
 
 type wlanResponse struct {
-	ID          string          `json:"id"`
-	ZoneID      string          `json:"zoneId,omitempty"`
-	Name        string          `json:"name"`
-	SSID        string          `json:"ssid"`
-	Description string          `json:"description,omitempty"`
-	GroupID     string          `json:"groupId,omitempty"`
-	Encryption  *wlanEncryption `json:"encryption,omitempty"`
-	VLAN        *wlanVLAN       `json:"vlan,omitempty"`
+	ID                  string                   `json:"id"`
+	ZoneID              string                   `json:"zoneId,omitempty"`
+	Name                string                   `json:"name"`
+	SSID                string                   `json:"ssid"`
+	Description         string                   `json:"description,omitempty"`
+	GroupID             string                   `json:"groupId,omitempty"`
+	Encryption          *wlanEncryption          `json:"encryption,omitempty"`
+	VLAN                *wlanVLAN                `json:"vlan,omitempty"`
+	AccessTunnelProfile *wlanAccessTunnelProfile `json:"accessTunnelProfile,omitempty"`
 }
 
 func (r *WLANResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -355,6 +369,17 @@ func (r *WLANResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 		}
 	} else {
 		state.VLAN = nil
+	}
+
+	if out.AccessTunnelProfile != nil {
+		state.AccessTunnelProfile = &WLANAccessTunnelProfileModel{}
+		if out.AccessTunnelProfile.Name != "" {
+			state.AccessTunnelProfile.Name = types.StringValue(out.AccessTunnelProfile.Name)
+		} else {
+			state.AccessTunnelProfile.Name = types.StringNull()
+		}
+	} else {
+		state.AccessTunnelProfile = nil
 	}
 
 	resp.State.Set(ctx, &state)
