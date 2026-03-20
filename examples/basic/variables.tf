@@ -32,3 +32,6 @@ variable "ssid" {
 variable "vlan" {
   type = number
 }
+variable "dataplane_name" {
+  type = string
+}

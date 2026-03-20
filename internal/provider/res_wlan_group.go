@@ -78,7 +78,8 @@ func (r *WLANGroupResource) Configure(_ context.Context, req resource.ConfigureR
 
 func buildCreateWLANGroupReq(plan *WLANGroupModel) (createWLANGroupReq, error) {
 	req := createWLANGroupReq{
-		Name: plan.Name.ValueString(),
+		Name:             plan.Name.ValueString(),
+		AccessTunnelType: "RuckusGRE",
 	}
 	if !plan.Description.IsNull() && !plan.Description.IsUnknown() {
 		req.Description = plan.Description.ValueString()
@@ -239,8 +240,9 @@ func (r *WLANGroupResource) Read(ctx context.Context, req resource.ReadRequest, 
 		resp.State.RemoveResource(ctx)
 		return
 	}
-	if httpResp.StatusCode != http.StatusOK {
-		resp.Diagnostics.AddError("read failed", fmt.Sprintf("HTTP status %d", httpResp.StatusCode))
+	if httpResp.StatusCode < 200 || httpResp.StatusCode > 299 {
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError("read failed", fmt.Sprintf("HTTP status %d: %s", httpResp.StatusCode, string(bodyBytes)))
 		return
 	}
 
@@ -308,8 +310,9 @@ func (r *WLANGroupResource) Update(ctx context.Context, req resource.UpdateReque
 		}
 	}()
 
-	if httpResp.StatusCode != http.StatusNoContent {
-		resp.Diagnostics.AddError("update failed", fmt.Sprintf("HTTP status %d", httpResp.StatusCode))
+	if httpResp.StatusCode < 200 || httpResp.StatusCode > 299 {
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError("update failed", fmt.Sprintf("HTTP status %d: %s", httpResp.StatusCode, string(bodyBytes)))
 		return
 	}
 
@@ -350,16 +353,18 @@ func (r *WLANGroupResource) Delete(ctx context.Context, req resource.DeleteReque
 		}
 	}()
 
-	if httpResp.StatusCode != http.StatusNoContent {
-		resp.Diagnostics.AddError("delete failed", fmt.Sprintf("HTTP status %d", httpResp.StatusCode))
+	if httpResp.StatusCode >= 400 && httpResp.StatusCode != http.StatusNotFound {
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		resp.Diagnostics.AddError("delete failed", fmt.Sprintf("HTTP status %d: %s", httpResp.StatusCode, string(bodyBytes)))
 		return
 	}
 }
 
 type createWLANGroupReq struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
-	Members     *[]string `json:"members,omitempty"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description,omitempty"`
+	Members          *[]string `json:"members,omitempty"`
+	AccessTunnelType string    `json:"accessTunnelType,omitempty"`
 }
 
 type wlanGroupMember struct {
