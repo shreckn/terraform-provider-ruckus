@@ -72,28 +72,19 @@ resource "ruckus_wlan_group" "office_wlans" {
   ]
 }
 
-# Option 2: Add existing WLANs by filtering them from the data source
-resource "ruckus_wlan_group" "managed_wlans" {
-  zone_id     = data.ruckus_zone.hq.id
-  name        = "Managed WLANs"
-  description = "Group of existing WLANs"
-
-  # Add existing WLANs that match a criteria
-  wlan_ids = [
-    for wlan in data.ruckus_wlans.all_wlans.list :
-    wlan.id if contains(lower(wlan.name), "managed")
-  ]
+# Option 2: Mixed - add both newly created and existing WLANs
+locals {
+  wlan_ids = concat(
+    ruckus_wlan.accounting.id,
+    [for wlan in data.ruckus_wlans.all_wlans.list : wlan_name if wlan.name == "existing-wlan-name"]
+  )
 }
 
-# Option 3: Mixed - add both newly created and existing WLANs
 resource "ruckus_wlan_group" "mixed_wlans" {
   zone_id     = data.ruckus_zone.hq.id
   name        = "Mixed WLANs Group"
   description = "Group containing both new and existing WLANs"
+  wlan_ids = local.wlan_ids
 
-  wlan_ids = concat(
-    [ruckus_wlan.accounting.id],
-    [wlan.id for wlan in data.ruckus_wlans.all_wlans.list if wlan.name == "existing-wlan-name"]
-  )
 }
 
