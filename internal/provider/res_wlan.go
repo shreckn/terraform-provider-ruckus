@@ -199,8 +199,6 @@ type wlanID struct {
 
 type createWLANResp wlanID
 
-type addMemberReq wlanID
-
 type wlanResponse struct {
 	ID                  string                   `json:"id"`
 	ZoneID              string                   `json:"zoneId,omitempty"`
@@ -477,13 +475,4 @@ func (r *WLANResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		return
 	}
 	drainBody(httpResp.Body)
-}
-
-type wlanGroup struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-type wlanGroupsResp struct {
-	List []wlanGroup `json:"list"`
 }
