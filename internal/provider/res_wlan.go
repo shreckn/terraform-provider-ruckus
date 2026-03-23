@@ -115,7 +115,7 @@ func (r *WLANResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"name":        schema.StringAttribute{Required: true},
 			"ssid":        schema.StringAttribute{Required: true},
 			"description": schema.StringAttribute{Optional: true},
-			"group_id":    schema.StringAttribute{Required: true},
+			"group_id":    schema.StringAttribute{Optional: true},
 		},
 		Blocks: map[string]schema.Block{
 			"encryption": schema.SingleNestedBlock{
