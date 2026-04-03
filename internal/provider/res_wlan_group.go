@@ -196,6 +196,73 @@ func (r *WLANGroupResource) Create(ctx context.Context, req resource.CreateReque
 		}
 	}
 
+	// Remove added WLANs from default group if it exists
+	if len(wlanIds) > 0 {
+		q4 := url.Values{}
+		q4.Set("serviceTicket", r.client.ServiceTicket)
+		listEndpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups?%s",
+			r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), q4.Encode())
+		listReq, err := http.NewRequestWithContext(ctx, http.MethodGet, listEndpoint, nil)
+		if err != nil {
+			resp.Diagnostics.AddError("list groups failed", err.Error())
+			return
+		}
+		listResp, err := r.client.HTTP.Do(listReq)
+		if err != nil {
+			resp.Diagnostics.AddError("list groups failed", err.Error())
+			return
+		}
+		defer func() {
+			if cerr := listResp.Body.Close(); cerr != nil {
+				resp.Diagnostics.AddWarning("list groups response close failed", cerr.Error())
+			}
+		}()
+		if listResp.StatusCode < 200 || listResp.StatusCode > 299 {
+			bodyBytes, _ := io.ReadAll(listResp.Body)
+			resp.Diagnostics.AddError("list groups failed", fmt.Sprintf("HTTP status %d: %s", listResp.StatusCode, string(bodyBytes)))
+			return
+		}
+		var wglr wlanGroupListResp
+		if err := json.NewDecoder(listResp.Body).Decode(&wglr); err != nil {
+			resp.Diagnostics.AddError("decode list groups failed", err.Error())
+			return
+		}
+		var defaultGroupID string
+		for _, wg := range wglr.List {
+			if wg.Name == "Default" {
+				defaultGroupID = wg.ID
+				break
+			}
+		}
+		if defaultGroupID != "" {
+			for _, wlanID := range wlanIds {
+				removeEndpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups/%s/members/%s?%s",
+					r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), defaultGroupID, wlanID, q4.Encode())
+				removeReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, removeEndpoint, nil)
+				if err != nil {
+					resp.Diagnostics.AddError("remove from default group failed", err.Error())
+					return
+				}
+				removeResp, err := r.client.HTTP.Do(removeReq)
+				if err != nil {
+					resp.Diagnostics.AddError("remove from default group failed", err.Error())
+					return
+				}
+				defer func() {
+					if cerr := removeResp.Body.Close(); cerr != nil {
+						resp.Diagnostics.AddWarning("remove from default response close failed", cerr.Error())
+					}
+				}()
+				if removeResp.StatusCode < 200 || removeResp.StatusCode > 299 {
+					bodyBytes, _ := io.ReadAll(removeResp.Body)
+					resp.Diagnostics.AddError("remove from default group failed", fmt.Sprintf("HTTP status %d: %s", removeResp.StatusCode, string(bodyBytes)))
+					return
+				}
+				drainBody(removeResp.Body)
+			}
+		}
+	}
+
 	// Read the created resource to populate computed fields (members)
 	q2 := url.Values{}
 	q2.Set("serviceTicket", r.client.ServiceTicket)
@@ -330,6 +397,44 @@ func (r *WLANGroupResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
+	// List groups to find default
+	qList := url.Values{}
+	qList.Set("serviceTicket", r.client.ServiceTicket)
+	listEndpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups?%s",
+		r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), qList.Encode())
+	listReq, err := http.NewRequestWithContext(ctx, http.MethodGet, listEndpoint, nil)
+	if err != nil {
+		resp.Diagnostics.AddError("list groups failed", err.Error())
+		return
+	}
+	listResp, err := r.client.HTTP.Do(listReq)
+	if err != nil {
+		resp.Diagnostics.AddError("list groups failed", err.Error())
+		return
+	}
+	defer func() {
+		if cerr := listResp.Body.Close(); cerr != nil {
+			resp.Diagnostics.AddWarning("list groups response close failed", cerr.Error())
+		}
+	}()
+	if listResp.StatusCode < 200 || listResp.StatusCode > 299 {
+		bodyBytes, _ := io.ReadAll(listResp.Body)
+		resp.Diagnostics.AddError("list groups failed", fmt.Sprintf("HTTP status %d: %s", listResp.StatusCode, string(bodyBytes)))
+		return
+	}
+	var wglr wlanGroupListResp
+	if err := json.NewDecoder(listResp.Body).Decode(&wglr); err != nil {
+		resp.Diagnostics.AddError("decode list groups failed", err.Error())
+		return
+	}
+	var defaultGroupID string
+	for _, wg := range wglr.List {
+		if wg.Name == "Default" {
+			defaultGroupID = wg.ID
+			break
+		}
+	}
+
 	// Compute differences
 	var currentWLANIds []string
 	if !state.Members.IsNull() {
@@ -433,6 +538,33 @@ func (r *WLANGroupResource) Update(ctx context.Context, req resource.UpdateReque
 			return
 		}
 		drainBody(addResp.Body)
+
+		// Remove WLAN from default group if it was added to this group
+		if defaultGroupID != "" {
+			removeEndpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups/%s/members/%s?%s",
+				r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), defaultGroupID, wlanID, q.Encode())
+			removeReq, err := http.NewRequestWithContext(ctx, http.MethodDelete, removeEndpoint, nil)
+			if err != nil {
+				resp.Diagnostics.AddError("remove from default group failed", err.Error())
+				return
+			}
+			removeResp, err := r.client.HTTP.Do(removeReq)
+			if err != nil {
+				resp.Diagnostics.AddError("remove from default group failed", err.Error())
+				return
+			}
+			defer func() {
+				if cerr := removeResp.Body.Close(); cerr != nil {
+					resp.Diagnostics.AddWarning("remove from default response close failed", cerr.Error())
+				}
+			}()
+			if removeResp.StatusCode < 200 || removeResp.StatusCode > 299 {
+				bodyBytes, _ := io.ReadAll(removeResp.Body)
+				resp.Diagnostics.AddError("remove from default group failed", fmt.Sprintf("HTTP status %d: %s", removeResp.StatusCode, string(bodyBytes)))
+				return
+			}
+			drainBody(removeResp.Body)
+		}
 	}
 
 	endpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups/%s?%s",
