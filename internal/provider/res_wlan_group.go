@@ -429,7 +429,7 @@ func (r *WLANGroupResource) Update(ctx context.Context, req resource.UpdateReque
 	}
 	var defaultGroupID string
 	for _, wg := range wglr.List {
-		if wg.Name == "Default" {
+		if wg.Name == "default" {
 			defaultGroupID = wg.ID
 			break
 		}
