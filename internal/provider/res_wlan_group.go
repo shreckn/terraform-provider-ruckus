@@ -200,8 +200,8 @@ func (r *WLANGroupResource) Create(ctx context.Context, req resource.CreateReque
 	if len(wlanIds) > 0 {
 		q4 := url.Values{}
 		q4.Set("serviceTicket", r.client.ServiceTicket)
-		listEndpoint := fmt.Sprintf("%s/wsg/api/public/%s/rkszones/%s/wlangroups?%s",
-			r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), q4.Encode())
+		listEndpoint := fmt.Sprintf("%s/%s/rkszones/%s/wlangroups/%s?%s",
+			r.client.BaseURL, r.client.APIVersion, plan.ZoneID.ValueString(), plan.ID.ValueString(), q4.Encode())
 		listReq, err := http.NewRequestWithContext(ctx, http.MethodGet, listEndpoint, nil)
 		if err != nil {
 			resp.Diagnostics.AddError("list groups failed", err.Error())
@@ -229,7 +229,7 @@ func (r *WLANGroupResource) Create(ctx context.Context, req resource.CreateReque
 		}
 		var defaultGroupID string
 		for _, wg := range wglr.List {
-			if wg.Name == "Default" {
+			if wg.Name == "default" {
 				defaultGroupID = wg.ID
 				break
 			}
