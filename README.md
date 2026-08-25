@@ -53,12 +53,44 @@ terraform {
 git clone https://github.com/nshreck/terraform-provider-ruckus.git
 cd terraform-provider-ruckus
 go build -o terraform-provider-ruckus
-
-# Local dev install layout (Linux/macOS example)
-mkdir -p ~/.terraform.d/plugins/registry.terraform.io/nshreck/ruckus/0.1.0/darwin_amd64
-cp terraform-provider-ruckus ~/.terraform.d/plugins/registry.terraform.io/nshreck/ruckus/0.1.0/darwin_amd64/
-
 ```
+
+#### Recommended: development overrides
+
+`dev_overrides` points Terraform at your build directly, with no plugin
+directory layout and no `terraform init` step. Create `~/.terraformrc`:
+
+```hcl
+provider_installation {
+  dev_overrides {
+    "nshreck/ruckus" = "/absolute/path/to/terraform-provider-ruckus"
+  }
+
+  # Everything else installs from its origin registry as normal.
+  # Omitting this leaves dev_overrides as the only installation method.
+  direct {}
+}
+```
+
+The path is the **directory** holding the compiled binary, not the binary
+itself. Run `terraform plan` from your test configuration; Terraform prints
+a warning confirming the override is active. Remove the block and run
+`terraform init -upgrade` when returning to a released version.
+
+To avoid touching a shared `~/.terraformrc`, put the block in a separate
+file and set `TF_CLI_CONFIG_FILE=/path/to/dev.tfrc`.
+
+#### Alternative: local plugin directory
+
+```bash
+PLATFORM="$(go env GOOS)_$(go env GOARCH)"
+PLUGIN_DIR=~/.terraform.d/plugins/registry.terraform.io/nshreck/ruckus/0.1.0/${PLATFORM}
+mkdir -p "${PLUGIN_DIR}"
+cp terraform-provider-ruckus "${PLUGIN_DIR}/"
+```
+
+Deriving `PLATFORM` from `go env` keeps this correct on Apple Silicon
+(`darwin_arm64`), Intel macOS (`darwin_amd64`), and Linux alike.
 
 ## 🧑‍🤝‍🧑 Contributing
 Contributions are welcome! Please open an issue or submit a pull request with improvements, bug fixes, or new features.
